@@ -1,0 +1,63 @@
+# This is a basic workflow to help you get started with Actions
+
+name: Pull request checks
+
+# Controls when the action will run. Triggers the workflow on push or pull request
+# events but only for the develop branch
+on:
+  pull_request:
+    branches:
+      - develop
+      - master
+      - main
+      - release/*
+
+permissions:
+  contents: read
+  
+concurrency:
+  group: pr-code-${{ github.base_ref }}-${{ github.ref_name }}
+  cancel-in-progress: true
+
+  # A workflow run is made up of one or more jobs that can run sequentially or in parallel
+
+jobs:
+  check-style:
+    name: Check Python style and run tests
+
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
+      fail-fast: true
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          
+      - uses: ./.github/actions/setup-repo
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install development requirements
+        run: |
+          make requirements
+
+      - name: Run checks
+        run: make pull-request
+
+  success-pr:
+    name: Success Pull Request
+    if: ${{ always() }}
+    needs:
+      - check-style
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Job Status status and fail if they are red
+        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')}}
+        run: |
+          echo "Fail!"
+          exit 1
+      - name: Success
+        run: echo "Success!"

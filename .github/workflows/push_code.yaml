@@ -1,0 +1,17 @@
+name: Push code
+
+on:
+  push:
+    branches:
+      - main
+      - release/*
+
+permissions:
+  contents: write
+
+jobs:
+  make-release:
+    uses: ./.github/workflows/common_make_release.yaml
+    secrets: inherit
+    with:
+      level: ${{ (startsWith(github.ref_name, 'release/')) && 'rc' || (contains(fromJson('["master", "main"]'), github.ref_name) && 'beta') || 'alpha' }}

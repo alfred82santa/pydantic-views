@@ -1,0 +1,71 @@
+name: versioning
+description: Setup up current version
+inputs:
+  level:
+    description: "Version increase level"
+    required: false
+    default: "none"
+outputs:
+  current-version:
+    description: "Old version"
+    value: ${{ steps.current-version.outputs.version }}
+  version:
+    description: "New version"
+    value: ${{ steps.define-version.outputs.version }}
+  version-no-build:
+    description: "New version with no build part"
+    value: ${{ steps.define-version.outputs.versionNoBuild }}
+  release-major:
+    description: "New major version"
+    value: ${{ steps.define-version.outputs.major }}
+  release-minor:
+    description: "New minor version"
+    value: ${{ steps.define-version.outputs.baseReleaseMinor }}
+  release-patch:
+    description: "New patch version"
+    value: ${{ steps.define-version.outputs.baseRelease }}
+  part-major:
+    description: "Major part of new version"
+    value: ${{ steps.define-version.outputs.major }}
+  part-minor:
+    description: "Minor part of new version"
+    value: ${{ steps.define-version.outputs.minor }}
+  part-patch:
+    description: "Patch part of new version"
+    value: ${{ steps.define-version.outputs.patch }}
+  part-prerelease-type:
+    description: "Prerelase type part of new version"
+    value: ${{ steps.define-version.outputs.prereleaseType }}
+  part-prerelease-number:
+    description: "Prerelase number part of new version"
+    value: ${{ steps.define-version.outputs.prereleaseNumber }}
+  part-build:
+    description: "Build part of new version"
+    value: ${{ steps.define-version.outputs.build }}
+  is-prerelease:
+    description: "Whether is a prerelease version or not"
+    value: ${{ steps.define-version.outputs.isPrerelease }}
+
+runs:
+  using: composite
+  steps:
+    - name: Store version
+      id: current-version
+      shell: bash
+      run: |
+        echo "version=$(poetry version --short)" >> "$GITHUB_OUTPUT"
+
+    - name: Define prerelease version
+      id: define-version
+      uses: alfred82santa/action-next-version@v1
+      with:
+        version: ${{ steps.current-version.outputs.version }}
+        level: ${{ inputs.level }}
+        versionFormat: "pep440"
+        releaseTagPattern: "^v([0-9](?:\\.?[0-9]+)*(?:[\\.\\-_+0-9a-zA-Z]+)?)$"
+
+    - name: Set development version
+      shell: bash
+      if: inputs.level != 'none'
+      run: |
+        poetry version ${{ steps.define-version.outputs.version }}

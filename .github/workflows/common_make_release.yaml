@@ -1,0 +1,55 @@
+name: Common make release
+
+on:
+  workflow_call:
+    inputs:
+      level:
+        description: "Version increase level"
+        required: false
+        default: "none"
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Make release
+    # The type of runner that the job will run on
+    runs-on: ubuntu-latest
+
+    outputs:
+      version: ${{ steps.define-version.outputs.version }}
+      base-release-version: ${{ steps.define-version.outputs.release-patch}}
+      release-ref: release/${{ steps.define-version.outputs.release-minor }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: ./.github/actions/setup-repo
+
+      - uses: ./.github/actions/versioning
+        id: define-version
+        with:
+          level: ${{ inputs.level }}
+
+      - name: Build package
+        run: |
+          poetry build
+
+      - name: Publish package
+        run: |
+          poetry publish --username=__token__ --password=${{ secrets.PYPI_API_TOKEN }}
+          
+      - name: Make release
+        id: make_release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG_NAME: v${{ steps.define-version.outputs.version-no-build }}
+          RELEASE_TITLE: Release ${{ steps.define-version.outputs.version }}
+        run: |
+          gh release create $TAG_NAME --target ${{ github.sha }} -t "$RELEASE_TITLE" ${{ (inputs.level != 'none') && '--prerelease' }} --generate-notes
+          echo "release=$TAG_NAME" >> "$GITHUB_OUTPUT"
+          echo "**Tag:** [$TAG_NAME]("$(gh release view $TAG_NAME --json url --jq ".url")")" >> $GITHUB_STEP_SUMMARY

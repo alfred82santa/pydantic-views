@@ -1,0 +1,41 @@
+name: Manual make release
+
+on:
+  workflow_dispatch:
+    inputs:
+      level:
+        description: "Release level"
+        required: true
+        type: choice
+        default: dev
+        options:
+          - production
+          - rc
+          - beta
+          - alpha
+          - dev
+
+permissions:
+  pull-requests: write
+  contents: write
+
+jobs:
+  make-release:
+    uses: ./.github/workflows/common_make_release.yaml
+    secrets: inherit
+    with:
+      level: ${{ inputs.level == 'production' && 'none' || inputs.level }}
+    
+  get-branch:
+    if: inputs.level == 'production'
+    uses: ./.github/workflows/common_get_version.yaml
+    secrets: inherit
+
+  increase-version:
+    needs:
+      - get-branch
+    uses: ./.github/workflows/common_push_version.yaml
+    with:
+      level: 'patch'
+      ref: ${{ needs.get-branch.outputs.release-ref }}
+    secrets: inherit
