@@ -1,0 +1,33 @@
+# This is a basic workflow to help you get started with Actions
+
+name: Increase version
+
+on:
+  workflow_dispatch:
+    inputs:
+      level:
+        description: "Version level to increase (major, minor or patch)"
+        required: true
+        default: "patch"
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+      ref:
+        description: "Base branch reference"
+        required: false
+        default: "develop"
+        type: string
+
+permissions:
+  pull-requests: write
+  contents: write
+  
+jobs:
+  increase_version:
+    uses: ./.github/workflows/common_push_version.yaml
+    with:
+      level: ${{ inputs.level }}
+      ref: ${{ inputs.ref }}
+    secrets: inherit

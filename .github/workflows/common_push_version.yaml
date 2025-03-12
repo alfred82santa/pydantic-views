@@ -1,0 +1,59 @@
+# This is a basic workflow to help you get started with Actions
+
+name: Common push version
+
+# Controls when the action will run. Triggers the workflow on push or pull request
+# events but only for the develop branch
+on:
+  workflow_call:
+    inputs:
+      level:
+        description: "Version level to increase (major, minor or patch)"
+        required: false
+        default: "minor"
+        type: string
+      ref:
+        description: "Base branch reference"
+        required: false
+        default: "main"
+        type: string
+
+concurrency:
+  group: push-version-${{ inputs.ref }}
+  cancel-in-progress: true
+
+permissions:
+  pull-requests: write
+  contents: write
+  
+jobs:
+  increase_version:
+    name: Increase version
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.ref }}
+          
+      - uses: ./.github/actions/setup-repo
+
+      - uses: ./.github/actions/versioning
+        id: define-version
+        with:
+          level: ${{ inputs.level }}
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          title: "Bump version to ${{ steps.define-version.outputs.version }}"
+          branch: "task/start-version-${{ steps.define-version.outputs.version }}"
+          delete-branch: true
+          commit-message: "Bump version to ${{ steps.define-version.outputs.version }}"
+          body: |
+            :crown: *Automatic PR starting new version*
+          labels: automated,bot
+          base: ${{ inputs.ref }}
+          add-paths: pyproject.toml         

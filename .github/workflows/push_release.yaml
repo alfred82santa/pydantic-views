@@ -1,0 +1,36 @@
+name: "Push new version"
+
+on:
+  push:
+    branches:
+      - release/*
+
+concurrency:
+  group: push-new-version-to-main-from-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  pull-requests: write
+  contents: write
+
+jobs:
+  get-version:
+    uses: ./.github/workflows/common_get_version.yaml
+    secrets: inherit
+
+  get-main-version:
+    uses: ./.github/workflows/common_get_version.yaml
+    secrets: inherit
+    with:
+      ref: main
+
+  increase-version:
+    needs:
+      - get-version
+      - get-main-version
+    if: needs.get-version.outputs.release-minor == needs.get-main-version.outputs.release-minor
+    uses: ./.github/workflows/common_push_version.yaml
+    with:
+      level: 'minor'
+      ref: main
+    secrets: inherit

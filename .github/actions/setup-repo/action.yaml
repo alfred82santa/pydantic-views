@@ -1,0 +1,38 @@
+name: setup
+description: Setup up repository
+inputs:
+  python-version:
+    description: Python version to setup
+    required: false
+    default: "3.13"
+  poetry-version:
+    description: Poetry version to setup
+    required: false
+    default: "2.0"
+
+runs:
+  using: composite
+  steps:
+    - name: Setup python
+      if: inputs.python-version
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Setup poetry
+      if: inputs.poetry-version
+      uses: abatilo/actions-poetry@v4
+      with:
+        poetry-version: ${{ inputs.poetry-version }}
+
+    - name: Setup a local virtual environment
+      shell: bash
+      run: |
+        poetry config virtualenvs.create true --local
+        poetry config virtualenvs.in-project true --local
+
+    - uses: actions/cache@v4
+      name: Define a cache for the virtual environment based on the dependencies lock file
+      with:
+        path: ./.venv
+        key: venv-${{ runner.os }}-${{ runner.arch }}-${{ matrix.python-version }}-${{ hashFiles('**/poetry.lock') }}
