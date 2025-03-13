@@ -5,11 +5,24 @@ description = "View for Pydantic models"
 authors = [
     {name = "Alfred Santacatalina",email = "alfred.santacatalinagea@telefonica.com"}
 ]
-license = "LGPL-3.0-or-later"
+license = "MIT"
 readme = "README.md"
 requires-python = ">=3.13,<4.0.0"
 dependencies = ["pydantic (>=2.10.6,<3.0.0)"]
+keywords = ["view", "pydantic", "datamodel", "model", "REST API"]
 
+[project.urls]
+Homepage = "https://github.com/alfred82santa/pydantic-views"
+Repository = "https://github.com/alfred82santa/pydantic-views.git"
+Issues = "https://github.com/alfred82santa/pydantic-views/issues"
+
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Framework :: Pydantic",
+    "Framework :: Pydantic :: 2",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+]
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
