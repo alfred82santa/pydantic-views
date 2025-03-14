@@ -1,5 +1,6 @@
 from collections.abc import Iterable, Mapping
 from copy import deepcopy
+from importlib import metadata
 from types import NoneType, UnionType
 from typing import Union  # type: ignore[deprecated]
 from typing import (
