@@ -50,6 +50,6 @@ jobs:
           TAG_NAME: v${{ steps.define-version.outputs.version-no-build }}
           RELEASE_TITLE: Release ${{ steps.define-version.outputs.version }}
         run: |
-          gh release create $TAG_NAME --target ${{ github.sha }} -t "$RELEASE_TITLE" ${{ (inputs.level != 'none') && '--prerelease' }} --generate-notes
+          gh release create $TAG_NAME --target ${{ github.sha }} -t "$RELEASE_TITLE" ${{ (inputs.level != 'none') && '--prerelease' || '' }} --generate-notes
           echo "release=$TAG_NAME" >> "$GITHUB_OUTPUT"
           echo "**Tag:** [$TAG_NAME]("$(gh release view $TAG_NAME --json url --jq ".url")")" >> $GITHUB_STEP_SUMMARY
