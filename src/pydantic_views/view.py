@@ -13,7 +13,12 @@ class View[T: BaseModel](BaseModel):
     __model_class_root__: ClassVar[ReferenceType[type[BaseModel]]]
 
     model_config = {
-        "protected_namespaces": ("view_class_root", "view_build", "view_apply")
+        "protected_namespaces": (
+            "view_class_root",
+            "view_build_to",
+            "view_apply_to",
+            "view_build_from",
+        )
     }
 
     @classmethod

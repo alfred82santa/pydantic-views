@@ -28,20 +28,20 @@ class AccessMode(Enum):
     HIDDEN = auto()
 
 
-#: Read and write field annotation. Field could be read and writen always.
+#: Read and write field annotation. Field could be read and written always.
 ReadAndWrite: TypeAlias = Annotated[T, AccessMode.READ_AND_WRITE]
 
-#: Read only field annotation. Field could be read always but never writen.
+#: Read only field annotation. Field could be read always but never written.
 ReadOnly = Annotated[T, AccessMode.READ_ONLY]
 
-#: Write only field annotation. Field could be writen always but never read.
+#: Write only field annotation. Field could be written always but never read.
 WriteOnly = Annotated[T, AccessMode.WRITE_ONLY]
 
 #: Read only on creation field annotation. Field could be read only after creation, and never again.
 ReadOnlyOnCreation = Annotated[T, AccessMode.READ_ONLY_ON_CREATION]
 
-#: Write only on creation field annotation. Field could be writen only after creation, and never again.
+#: Write only on creation field annotation. Field could be written only after creation, and never again.
 WriteOnlyOnCreation = Annotated[T, AccessMode.WRITE_ONLY_ON_CREATION]
 
-#: Hidden field annotation. Field could not be read or writen.
+#: Hidden field annotation. Field could not be read or written.
 Hidden = Annotated[T, AccessMode.HIDDEN]

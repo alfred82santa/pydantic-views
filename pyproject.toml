@@ -1,12 +1,12 @@
 [project]
 name = "pydantic-views"
 version = "0.1.0"
-description = "View for Pydantic models"
+description = "Views for Pydantic models"
 authors = [
     {name = "Alfred Santacatalina",email = "alfred.santacatalinagea@telefonica.com"}
 ]
 license = "MIT"
-readme = "README.md"
+readme = "README.rst"
 requires-python = ">=3.13,<4.0.0"
 dependencies = ["pydantic (>=2.10.6,<3.0.0)"]
 keywords = ["view", "pydantic", "datamodel", "model", "REST API"]
@@ -17,11 +17,13 @@ classifiers = [
     "Framework :: Pydantic :: 2",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.13",
+    "Typing :: Typed"
 ]
 
 [project.urls]
 Homepage = "https://github.com/alfred82santa/pydantic-views"
 Repository = "https://github.com/alfred82santa/pydantic-views.git"
+Documentation = "https://pydantic-views.readthedocs.io/latest/"
 Issues = "https://github.com/alfred82santa/pydantic-views/issues"
 
 [build-system]
