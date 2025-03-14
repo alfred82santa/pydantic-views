@@ -1,7 +1,6 @@
 
 .. |docs| image:: https://readthedocs.org/projects/pydantic-views/badge/?version=latest
     :alt: Documentation Status
-    :scale: 100%
     :target: https://pydantic-views.readthedocs.io/latest/?badge=latest
 
 .. |python-versions| image:: https://img.shields.io/pypi/pyversions/pydantic-views
@@ -77,7 +76,7 @@ How to use
 ----------
 
 When you define a pydantic model you must mark the access model for each field. It means
-you should use our :ref:`annotations <api-annotations>` to define field typing.
+you should use our `annotations <https://pydantic-views.readthedocs.io/latest/api.html#field-annotations>`_ to define field typing.
 
 .. code-block:: python
 
@@ -147,7 +146,7 @@ It is equivalent to:
    class ExampleModelUpdate(View[ExampleModel]):
        field_str: str = Field(default_factory=lambda: PydanticUndefined)
 
-As you can see, on `Update` view all fields has a default factory returning :obj:`~pydantic.PydanticUndefined`
+As you can see, on `Update` view all fields has a default factory returning `PydanticUndefined`
 in order to make them optionals. And when an update view is applied to a given model, the fields that are 
 not set (use default value) will not be applied to the model.
 
