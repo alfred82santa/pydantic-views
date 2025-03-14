@@ -6,6 +6,10 @@ from pydantic import BaseModel, RootModel
 
 
 class View[T: BaseModel](BaseModel):
+    """
+    View of model.
+    """
+
     __model_class_root__: ClassVar[ReferenceType[type[BaseModel]]]
 
     model_config = {
@@ -14,6 +18,12 @@ class View[T: BaseModel](BaseModel):
 
     @classmethod
     def view_class_root(cls) -> type[T]:
+        """
+        Returns the class object associated to the view.
+
+        :returns: Associated model class.
+        """
+
         root = cls.__model_class_root__()
 
         if root is None:  # pragma: no cover
@@ -23,22 +33,47 @@ class View[T: BaseModel](BaseModel):
 
     @classmethod
     def view_build_from(cls, model: T):
+        """
+        Build view from given model.
+
+        :param model: Model class to build view from.
+        :returns: View of model class.
+        """
         return cls.model_validate(model.model_dump(exclude_unset=True, by_alias=True))
 
     def view_build_to(self) -> T:
+        """
+        Build associated model from view data.
+
+        :returns: Associated model instance with view data.
+        """
+
         return self.view_class_root().model_validate(
             self.model_dump(exclude_unset=True, exclude_defaults=True, by_alias=True)
         )
 
     def view_apply_to(self, model: T) -> T:
+        """
+        Apply view data to associated model.
+
+        :param model: Model instance to use as base..
+        :returns: Associated model instance with view data merged to given model data.
+        """
+
         return model_apply(model, self)
 
 
 class RootView[R](View[RootModel[R]], RootModel[R]):
-    pass
+    """
+    View for root models.
+    """
 
 
 def model_apply[T: BaseModel](orig: T, view: View[T] | T) -> T:
+    """
+    Merge view or model into model
+    """
+
     update_data: dict[str, Any] = {}
 
     for field in view.model_fields_set:

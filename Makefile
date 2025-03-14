@@ -21,4 +21,4 @@ include Version.mk
 
 
 docs.%:
-	@${MAKE} -C docs/ HELP_PREFIX="docs." $(*)
+	@${POETRY_RUN} ${MAKE} -C docs/ HELP_PREFIX="docs." $(*)

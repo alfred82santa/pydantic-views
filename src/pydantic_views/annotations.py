@@ -1,40 +1,47 @@
 from enum import Enum, auto
-from typing import Annotated, TypeVar
+from typing import Annotated, TypeAlias, TypeVar
 
 T = TypeVar("T")
 
 
 class AccessMode(Enum):
+    """
+    Field access mode.
+    """
+
+    #: Read and write mark.
     READ_AND_WRITE = auto()
+
+    #: Read only mark.
     READ_ONLY = auto()
+
+    #: Write only mark.
     WRITE_ONLY = auto()
+
+    #: Read only on creation mark.
     READ_ONLY_ON_CREATION = auto()
+
+    #: Write only on creation mark.
     WRITE_ONLY_ON_CREATION = auto()
+
+    #: Hidden mark.
     HIDDEN = auto()
 
 
-class FieldAccess:
-    __slots__ = ("_mode",)
+#: Read and write field annotation. Field could be read and writen always.
+ReadAndWrite: TypeAlias = Annotated[T, AccessMode.READ_AND_WRITE]
 
-    def __init__(self, mode: AccessMode = AccessMode.READ_AND_WRITE):
-        self._mode = mode
+#: Read only field annotation. Field could be read always but never writen.
+ReadOnly = Annotated[T, AccessMode.READ_ONLY]
 
-    @property
-    def mode(self) -> AccessMode:
-        return self._mode
+#: Write only field annotation. Field could be writen always but never read.
+WriteOnly = Annotated[T, AccessMode.WRITE_ONLY]
 
+#: Read only on creation field annotation. Field could be read only after creation, and never again.
+ReadOnlyOnCreation = Annotated[T, AccessMode.READ_ONLY_ON_CREATION]
 
-RW = FieldAccess(AccessMode.READ_AND_WRITE)
-RO = FieldAccess(AccessMode.READ_ONLY)
-WO = FieldAccess(AccessMode.WRITE_ONLY)
-ROOC = FieldAccess(AccessMode.READ_ONLY_ON_CREATION)
-WOOC = FieldAccess(AccessMode.WRITE_ONLY_ON_CREATION)
-HIDDEN = FieldAccess(AccessMode.HIDDEN)
+#: Write only on creation field annotation. Field could be writen only after creation, and never again.
+WriteOnlyOnCreation = Annotated[T, AccessMode.WRITE_ONLY_ON_CREATION]
 
-
-ReadAndWrite = Annotated[T, RW]
-ReadOnly = Annotated[T, RO]
-WriteOnly = Annotated[T, WO]
-ReadOnlyOnCreation = Annotated[T, ROOC]
-WriteOnlyOnCreation = Annotated[T, WOOC]
-Hidden = Annotated[T, HIDDEN]
+#: Hidden field annotation. Field could not be read or writen.
+Hidden = Annotated[T, AccessMode.HIDDEN]

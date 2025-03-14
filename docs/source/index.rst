@@ -7,3 +7,4 @@ View for Pydantic models documentation
    :maxdepth: 2
    :caption: Contents:
 
+   api

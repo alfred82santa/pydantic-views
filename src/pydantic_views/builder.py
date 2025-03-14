@@ -15,22 +15,34 @@ from pydantic import BaseModel, RootModel, create_model
 from pydantic.fields import ComputedFieldInfo, FieldInfo
 from pydantic_core import PydanticUndefined
 
-from .annotations import AccessMode, FieldAccess
+from .annotations import AccessMode
 from .manager import Manager
 from .view import RootView, View
 
 
 class Builder:
+    """
+    View builder. It create a view classes from models following given criterias.
+    """
+
     def __init__(
         self,
-        suffix: str,
+        view_name: str,
         access_modes: tuple[AccessMode, ...],
         all_optional: bool = False,
         all_nullable: bool = False,
         hide_default_null: bool = False,
         include_computed_fields: bool = False,
     ) -> None:
-        self.suffix = suffix
+        """
+        :param view_name: View name.
+        :param access_modes: Access modes to filter for.
+        :param all_optional: Make all fields optionals. On updates it allows to send just fields you want to change.
+        :param all_nullable: Make all fields nulleables. On some kinds of updates it could meant set default value.
+        :param hide_default_null: Hide :obj:`None` as default value. It produces better examples.
+        :param include_computed_fields: Whether computed fields must be included on view or not.
+        """
+        self.view_name = view_name
         self.access_modes = access_modes
         self.all_optional = all_optional
         self.all_nullable = all_nullable
@@ -39,9 +51,15 @@ class Builder:
         self._views: dict[type[BaseModel], type[View[BaseModel]] | ForwardRef] = {}
 
     def build_view[T: BaseModel](self, model: type[T]) -> type[View[T] | T]:
+        """
+        Builds a view from model if it does not exist, otherwise it return already created one.
+
+        :param model: Model class.
+        :returns: View of model class.
+        """
         manager = ensure_model_views(model)
         try:
-            result: type[View[T] | T] = manager[self.suffix]
+            result: type[View[T] | T] = manager[self.view_name]
         except (KeyError, TypeError):
             result = manager.build_view(self)
 
@@ -56,6 +74,14 @@ class Builder:
     def get_view_ref[T: BaseModel](
         self, model: type[T]
     ) -> type[View[T] | T] | ForwardRef:
+        """
+        Returns a view of model or a forward reference to it.
+
+        :param model: Model class.
+        :type model: type[T]
+        :returns: View of model class or reference to it.
+        :rtype: type[View[T] | T] | ForwardRef
+        """
         try:
             return cast(type[View[T]] | ForwardRef, self._views[model])
         except KeyError:
@@ -64,7 +90,7 @@ class Builder:
         manager = ensure_model_views(model)
 
         try:
-            view: type[View[T] | T] = manager[self.suffix]
+            view: type[View[T] | T] = manager[self.view_name]
         except KeyError:
             view = manager.build_view(self)
 
@@ -73,7 +99,7 @@ class Builder:
         return view
 
     def _filter_field(self, f_info: FieldInfo):
-        am = {m.mode for m in f_info.metadata if isinstance(m, FieldAccess)}
+        am = {m for m in f_info.metadata if isinstance(m, AccessMode)}
         return len((am & set(self.access_modes))) == 0 and len(am) > 0
 
     def _iter_fields[T: BaseModel](self, model: type[T]):
@@ -94,9 +120,15 @@ class Builder:
             yield f_name, cf_info
 
     def build_from_model[T: BaseModel](self, model: type[T]) -> type[View[T] | T]:
+        """
+        Builds a view from model
+
+        :param model: Model class.
+        :returns: View of model class.
+        """
         from pydantic._internal._config import ConfigWrapper
 
-        view_name = model.__name__ + self.suffix[0].upper() + self.suffix[1:]
+        view_name = model.__name__ + self.view_name[0].upper() + self.view_name[1:]
         try:
             view_cache = self._views[model]
             if not isinstance(view_cache, ForwardRef):
@@ -109,7 +141,7 @@ class Builder:
         manager = ensure_model_views(model)
 
         try:
-            view = manager[self.suffix]
+            view = manager[self.view_name]
             self._views[model] = cast(type[View[BaseModel]], view)
         except KeyError:
             model_fields: dict[str, tuple[type[Any] | None, FieldInfo]] = {}
@@ -144,7 +176,7 @@ class Builder:
 
                 _View.model_config["protected_namespaces"] = tuple(
                     {
-                        *ConfigWrapper(_View.model_config).protected_namespaces,
+                        *ConfigWrapper(model.model_config).protected_namespaces,
                         *ConfigWrapper(View.model_config).protected_namespaces,
                     }
                 )
@@ -155,7 +187,7 @@ class Builder:
                 "__module__": model.__module__,
                 "__base__": base_view,
                 "__doc__": (
-                    f"View `{self.suffix}` "
+                    f"View `{self.view_name}` "
                     f"of model :class:`~{model.__module__}.{model.__qualname__}`"
                 ),
                 **model_fields,
@@ -274,9 +306,15 @@ class Builder:
         )
 
 
-def BuilderCreate(suffix: str = "Create") -> Builder:
+def BuilderCreate(view_name: str = "Create") -> Builder:
+    """
+    Default builder for `Create` view. Views created by it keep fields with
+    :obj:`access mode <pydantic_views.AccessMode>` :obj:`~pydantic_views.AccessMode.READ_AND_WRITE`,
+    :obj:`~pydantic_views.AccessMode.WRITE_ONLY` and :obj:`~pydantic_views.AccessMode.WRITE_ONLY_ON_CREATION`.
+    And hide default :obj:`None` value. It produces a better schema examples.
+    """
     return Builder(
-        suffix,
+        view_name,
         access_modes=(
             AccessMode.READ_AND_WRITE,
             AccessMode.WRITE_ONLY,
@@ -286,9 +324,15 @@ def BuilderCreate(suffix: str = "Create") -> Builder:
     )
 
 
-def BuilderCreateResult(suffix: str = "CreateResult") -> Builder:
+def BuilderCreateResult(view_name: str = "CreateResult") -> Builder:
+    """
+    Default builder for `CreateResult` view. Views created by it keep fields with
+    :obj:`access mode <pydantic_views.AccessMode>` :obj:`~pydantic_views.AccessMode.READ_AND_WRITE`,
+    :obj:`~pydantic_views.AccessMode.READ_ONLY` and :obj:`~pydantic_views.AccessMode.READ_ONLY_ON_CREATION`.
+    And includes computed fields.
+    """
     return Builder(
-        suffix,
+        view_name,
         access_modes=(
             AccessMode.READ_AND_WRITE,
             AccessMode.READ_ONLY,
@@ -298,17 +342,27 @@ def BuilderCreateResult(suffix: str = "CreateResult") -> Builder:
     )
 
 
-def BuilderUpdate(suffix: str = "Update") -> Builder:
+def BuilderUpdate(view_name: str = "Update") -> Builder:
+    """
+    Default builder for `Update` view. Views created by it keep fields with
+    :obj:`access mode <pydantic_views.AccessMode>` :obj:`~pydantic_views.AccessMode.READ_AND_WRITE`
+    and :obj:`~pydantic_views.AccessMode.WRITE_ONLY`. And make all fields optional.
+    """
     return Builder(
-        suffix,
+        view_name,
         access_modes=(AccessMode.READ_AND_WRITE, AccessMode.WRITE_ONLY),
         all_optional=True,
     )
 
 
-def BuilderLoad(suffix: str = "Load") -> Builder:
+def BuilderLoad(view_name: str = "Load") -> Builder:
+    """
+    Default builder for `Load` view. Views created by it keep fields with
+    :obj:`access mode <pydantic_views.AccessMode>` :obj:`~pydantic_views.AccessMode.READ_AND_WRITE`
+    and :obj:`~pydantic_views.AccessMode.READ_ONLY`. And includes computed fields.
+    """
     return Builder(
-        suffix,
+        view_name,
         access_modes=(
             AccessMode.READ_AND_WRITE,
             AccessMode.READ_ONLY,
@@ -318,6 +372,13 @@ def BuilderLoad(suffix: str = "Load") -> Builder:
 
 
 def ensure_model_views[T: BaseModel](model: type[T]):
+    """
+    Ensures model has a view manager and returns it.
+
+    :param model: Model class.
+    :returns: Views manager for model class.
+    """
+
     try:
         if (
             manager := cast(Manager[T], getattr(model, "model_views"))
