@@ -1,10 +1,8 @@
-======================================
-View for Pydantic models documentation
-======================================
+.. include:: ../../README.rst
+   :start-after: .. start-doc
 
 
 .. toctree::
    :maxdepth: 2
-   :caption: Contents:
 
    api

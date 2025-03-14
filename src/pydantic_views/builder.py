@@ -1,5 +1,6 @@
 from collections.abc import Iterable, Mapping
 from copy import deepcopy
+from importlib import metadata
 from types import NoneType, UnionType
 from typing import Union  # type: ignore[deprecated]
 from typing import (
@@ -217,6 +218,7 @@ class Builder:
             annotation=self._map_annotation(
                 f_info.annotation, ignore_nullable=ignore_nullable
             ),
+            metadata=[m for m in f_info.metadata if not isinstance(m, AccessMode)],
         )
 
         if self.all_optional:
@@ -312,6 +314,9 @@ def BuilderCreate(view_name: str = "Create") -> Builder:
     :obj:`access mode <pydantic_views.AccessMode>` :obj:`~pydantic_views.AccessMode.READ_AND_WRITE`,
     :obj:`~pydantic_views.AccessMode.WRITE_ONLY` and :obj:`~pydantic_views.AccessMode.WRITE_ONLY_ON_CREATION`.
     And hide default :obj:`None` value. It produces a better schema examples.
+
+    :param view_name: View name.
+    :returns: Builder configured for `Create` views.
     """
     return Builder(
         view_name,
@@ -330,6 +335,9 @@ def BuilderCreateResult(view_name: str = "CreateResult") -> Builder:
     :obj:`access mode <pydantic_views.AccessMode>` :obj:`~pydantic_views.AccessMode.READ_AND_WRITE`,
     :obj:`~pydantic_views.AccessMode.READ_ONLY` and :obj:`~pydantic_views.AccessMode.READ_ONLY_ON_CREATION`.
     And includes computed fields.
+
+    :param view_name: View name.
+    :returns: Builder configured for `CreateResult` views.
     """
     return Builder(
         view_name,
@@ -347,6 +355,9 @@ def BuilderUpdate(view_name: str = "Update") -> Builder:
     Default builder for `Update` view. Views created by it keep fields with
     :obj:`access mode <pydantic_views.AccessMode>` :obj:`~pydantic_views.AccessMode.READ_AND_WRITE`
     and :obj:`~pydantic_views.AccessMode.WRITE_ONLY`. And make all fields optional.
+
+    :param view_name: View name.
+    :returns: Builder configured for `Update` views.
     """
     return Builder(
         view_name,
@@ -360,6 +371,9 @@ def BuilderLoad(view_name: str = "Load") -> Builder:
     Default builder for `Load` view. Views created by it keep fields with
     :obj:`access mode <pydantic_views.AccessMode>` :obj:`~pydantic_views.AccessMode.READ_AND_WRITE`
     and :obj:`~pydantic_views.AccessMode.READ_ONLY`. And includes computed fields.
+
+    :param view_name: View name.
+    :returns: Builder configured for `Load` views.
     """
     return Builder(
         view_name,

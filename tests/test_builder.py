@@ -214,7 +214,9 @@ def test_view(
             view_cls.model_fields[f].discriminator
             == Model.model_fields[f].discriminator
         )
-        assert view_cls.model_fields[f].metadata == Model.model_fields[f].metadata
+        assert view_cls.model_fields[f].metadata == [
+            m for m in Model.model_fields[f].metadata if not isinstance(m, AccessMode)
+        ]
 
 
 @pytest.mark.parametrize(
