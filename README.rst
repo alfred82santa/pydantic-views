@@ -51,6 +51,7 @@ Features
 - Create view for referenced inner models.
 - It is possible to set a view manually.
 - Tested code.
+- Full typed.
 - Opensource.
   
 
