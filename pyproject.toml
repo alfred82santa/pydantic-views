@@ -21,9 +21,9 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://pydantic-views.readthedocs.io/latest/"
+Homepage = "https://pydantic-views.readthedocs.io/stable/"
 Repository = "https://github.com/alfred82santa/pydantic-views.git"
-Documentation = "https://pydantic-views.readthedocs.io/latest/"
+Documentation = "https://pydantic-views.readthedocs.io/stable/"
 Issues = "https://github.com/alfred82santa/pydantic-views/issues"
 
 [build-system]

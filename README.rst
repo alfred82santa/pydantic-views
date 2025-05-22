@@ -1,7 +1,7 @@
 
-.. |docs| image:: https://readthedocs.org/projects/pydantic-views/badge/?version=latest
+.. |docs| image:: https://readthedocs.org/projects/pydantic-views/badge/?version=stable
     :alt: Documentation Status
-    :target: https://pydantic-views.readthedocs.io/latest/?badge=latest
+    :target: https://pydantic-views.readthedocs.io/stable/?badge=stable
 
 .. |python-versions| image:: https://img.shields.io/pypi/pyversions/pydantic-views
    :alt: PyPI - Python Version

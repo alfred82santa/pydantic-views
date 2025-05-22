@@ -1,10 +1,11 @@
 from collections.abc import Iterable, Mapping
 from copy import deepcopy
 from types import NoneType, UnionType
-from typing import Union  # type: ignore[deprecated]
-from typing import (
+from typing import (  # type: ignore[deprecated]
     Any,
     ForwardRef,
+    Literal,
+    Union,
     cast,
     get_args,
     get_origin,
@@ -257,25 +258,36 @@ class Builder:
         if origin is None:
             return finish_annotation(annotation)
 
-        if origin is not Union and not issubclass(origin, UnionType):  # type: ignore
-            if issubclass(origin, Mapping):
-                return finish_annotation(
-                    origin[  # type: ignore
-                        self._map_annotation(type_args[0], ignore_nullable=True),
-                        self._map_annotation(type_args[1]),
-                    ]
-                )
-            elif issubclass(origin, Iterable):
-                return finish_annotation(
-                    origin[  # type: ignore
-                        *(
-                            self._map_annotation(
-                                t, ignore_nullable=issubclass(origin, (list, set))
+        if origin is not Union and not (
+            isinstance(origin, type) and issubclass(origin, UnionType)
+        ):
+            if origin is Literal:
+                return origin[
+                    *(self._map_annotation(t, ignore_nullable=True) for t in type_args)
+                ]  # type: ignore
+
+            elif isinstance(origin, type):
+                if issubclass(origin, Mapping):
+                    return finish_annotation(
+                        origin[  # type: ignore
+                            self._map_annotation(type_args[0], ignore_nullable=True),
+                            self._map_annotation(type_args[1]),
+                        ]
+                    )
+                elif issubclass(origin, Iterable):
+                    return finish_annotation(
+                        origin[  # type: ignore
+                            *(
+                                self._map_annotation(
+                                    t, ignore_nullable=issubclass(origin, (list, set))
+                                )
+                                for t in type_args
                             )
-                            for t in type_args
-                        )
-                    ]
-                )
+                        ]
+                    )
+            return finish_annotation(
+                origin[*(self._map_annotation(t) for t in type_args)]  # type: ignore
+            )
 
         return Union[  # type: ignore
             *(

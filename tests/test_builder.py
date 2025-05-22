@@ -1,7 +1,7 @@
 from collections.abc import Callable, Mapping
 from itertools import chain, combinations
 from types import NoneType
-from typing import Any, Optional, Union, get_args, get_origin  # type: ignore
+from typing import Any, Literal, Optional, Union, get_args, get_origin  # type: ignore
 
 import pytest
 from pydantic import BaseModel, Field, RootModel, computed_field
@@ -55,6 +55,9 @@ class Model(BaseModel):
     read_and_write_field_str: ReadAndWrite[str]
     hidden_str: Hidden[str]
 
+    literal_int: Literal[1]
+    literal_read_only_str: ReadOnly[Literal["literal"]]
+
     @computed_field
     def computed_field_int(self) -> int:
         return 1
@@ -107,12 +110,25 @@ _groups = [
     (
         "ReadOnly",
         (AccessMode.READ_ONLY,),
-        {"field_int", "read_only_field_int", "field_str", "read_only_field_str"},
+        {
+            "field_int",
+            "read_only_field_int",
+            "field_str",
+            "read_only_field_str",
+            "literal_int",
+            "literal_read_only_str",
+        },
     ),
     (
         "WriteOnly",
         (AccessMode.WRITE_ONLY,),
-        {"field_int", "write_only_field_int", "field_str", "write_only_field_str"},
+        {
+            "field_int",
+            "write_only_field_int",
+            "field_str",
+            "write_only_field_str",
+            "literal_int",
+        },
     ),
     (
         "ReadOnlyOnCreation",
@@ -122,6 +138,7 @@ _groups = [
             "read_only_on_creation_field_int",
             "field_str",
             "read_only_on_creation_field_str",
+            "literal_int",
         },
     ),
     (
@@ -132,6 +149,7 @@ _groups = [
             "write_only_on_creation_field_int",
             "field_str",
             "write_only_on_creation_field_str",
+            "literal_int",
         },
     ),
     (
@@ -142,6 +160,7 @@ _groups = [
             "field_str",
             "read_and_write_field_int",
             "read_and_write_field_str",
+            "literal_int",
         },
     ),
     (
@@ -152,6 +171,7 @@ _groups = [
             "field_str",
             "hidden_int",
             "hidden_str",
+            "literal_int",
         },
     ),
 ]
@@ -231,6 +251,12 @@ def test_view_all_nullable(
     view_cls = builder.build_view(Model)
 
     for f in expected_fields:
+        if get_origin(view_cls.model_fields[f].annotation) is Literal:
+            assert (
+                view_cls.model_fields[f].annotation == Model.model_fields[f].annotation
+            )
+            continue
+
         assert (
             view_cls.model_fields[f].annotation
             == Model.model_fields[f].annotation | None  # type: ignore
@@ -592,6 +618,8 @@ def test_view_complex_types_all_nullable(
                 "read_and_write_field_int",
                 "read_and_write_field_str",
                 "computed_field_int",
+                "literal_int",
+                "literal_read_only_str",
             },
             id="Load",
         ),
@@ -605,6 +633,7 @@ def test_view_complex_types_all_nullable(
                 "write_only_field_str",
                 "read_and_write_field_int",
                 "read_and_write_field_str",
+                "literal_int",
             },
             id="Update",
         ),
@@ -621,6 +650,8 @@ def test_view_complex_types_all_nullable(
                 "read_and_write_field_int",
                 "read_and_write_field_str",
                 "computed_field_int",
+                "literal_int",
+                "literal_read_only_str",
             },
             id="CreateResult",
         ),
@@ -636,6 +667,7 @@ def test_view_complex_types_all_nullable(
                 "write_only_on_creation_field_str",
                 "read_and_write_field_int",
                 "read_and_write_field_str",
+                "literal_int",
             },
             id="Create",
         ),
