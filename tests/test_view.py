@@ -85,9 +85,7 @@ def test_update_model[T: Model](model_cls: type[T], alias_gen: Callable[[str], s
         (ModelAlias, to_camel),
     ],
 )
-def test_model_perspective[T: Model](
-    model_cls: type[T], alias_gen: Callable[[str], str]
-):
+def test_model_perspective[T: Model](model_cls: type[T], alias_gen: Callable[[str], str]):
     orig = model_cls.model_validate(
         {
             alias_gen("field_int"): 3,
@@ -114,9 +112,7 @@ def test_model_perspective[T: Model](
     ],
 )
 def test_no_view[T: Model](model_cls: type[T], alias_gen: Callable[[str], str]):
-    assert (
-        model_cls.model_fields == ensure_model_views(model_cls)["Replica"].model_fields
-    )
+    assert model_cls.model_fields == ensure_model_views(model_cls)["Replica"].model_fields
 
     orig = model_cls.model_validate(
         {

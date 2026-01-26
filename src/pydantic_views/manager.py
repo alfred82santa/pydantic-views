@@ -19,7 +19,7 @@ class Manager[TModel: BaseModel]:
     def __init__(self, model: type[TModel]):
         """ """
         self._model = ref(model)
-        self._views: dict[str, type["View[TModel] | TModel"]] = {}
+        self._views: dict[str, type[View[TModel] | TModel]] = {}
 
     @property
     def model(self) -> type[TModel]:

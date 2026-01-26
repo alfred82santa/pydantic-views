@@ -53,7 +53,7 @@ runs:
       id: current-version
       shell: bash
       run: |
-        echo "version=$(poetry version --short)" >> "$GITHUB_OUTPUT"
+        echo "version=$(uv version --short)" >> "$GITHUB_OUTPUT"
 
     - name: Define prerelease version
       id: define-version
@@ -68,4 +68,4 @@ runs:
       shell: bash
       if: inputs.level != 'none'
       run: |
-        poetry version ${{ steps.define-version.outputs.version }}
+        uv version ${{ steps.define-version.outputs.version }}

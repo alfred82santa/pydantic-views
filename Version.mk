@@ -1,8 +1,8 @@
 
 
 version:
-	@poetry version --short
+	@${BUILDER_EXECUTABLE} version --short
 
 version-set.%:
-	@poetry version $*
+	@${BUILDER_EXECUTABLE} version $*
 	@${MAKE} MAKEFLAGS=--no-print-directory version
