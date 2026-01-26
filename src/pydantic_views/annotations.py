@@ -1,3 +1,10 @@
+"""
+Helpers to annotate Pydantic fields with access modes used by pydantic-views builders.
+
+These annotations tell the builders whether a field should be exposed for read, write,
+creation-only flows, or hidden entirely.
+"""
+
 from enum import Enum, auto
 from typing import Annotated, TypeVar
 
@@ -5,9 +12,7 @@ T = TypeVar("T")
 
 
 class AccessMode(Enum):
-    """
-    Field access mode.
-    """
+    """Access rules that determine if and when a field is exposed in generated views."""
 
     #: Read and write mark.
     READ_AND_WRITE = auto()

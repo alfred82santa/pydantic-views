@@ -23,9 +23,7 @@ from .view import RootView, View
 
 
 class Builder:
-    """
-    View builder. It create a view classes from models following given criteria.
-    """
+    """Factory for generating view classes from Pydantic models based on access rules."""
 
     def __init__(
         self,
@@ -37,12 +35,12 @@ class Builder:
         include_computed_fields: bool = False,
     ) -> None:
         """
-        :param view_name: View name.
-        :param access_modes: Access modes to filter for.
-        :param all_optional: Make all fields optionals. On updates it allows to send just fields you want to change.
-        :param all_nullable: Make all fields nullable. On some kinds of updates it could meant set default value.
-        :param hide_default_null: Hide :obj:`None` as default value. It produces better examples.
-        :param include_computed_fields: Whether computed fields must be included on view or not.
+        :param view_name: Name suffix for the generated view class.
+        :param access_modes: Access modes that the builder will include in generated views.
+        :param all_optional: Make all fields optional (useful for update scenarios).
+        :param all_nullable: Make all fields nullable when allowed.
+        :param hide_default_null: Replace default ``None`` with ``PydanticUndefined`` to hide ``null`` in schemas.
+        :param include_computed_fields: Whether computed fields should be included in generated views.
         """
         self.view_name = view_name
         self.access_modes = access_modes
@@ -54,10 +52,10 @@ class Builder:
 
     def build_view[T: BaseModel](self, model: type[T]) -> type[View[T] | T]:
         """
-        Builds a view from model if it does not exist, otherwise it return already created one.
+        Build or return a cached view for the given model.
 
-        :param model: Model class.
-        :returns: View of model class.
+        :param model: Model class to derive the view from.
+        :returns: View class associated to ``model`` for this builder.
         """
         manager = ensure_model_views(model)
         try:
@@ -75,12 +73,10 @@ class Builder:
 
     def get_view_ref[T: BaseModel](self, model: type[T]) -> type[View[T] | T] | ForwardRef:
         """
-        Returns a view of model or a forward reference to it.
+        Return the view class or a forward reference for the model.
 
-        :param model: Model class.
-        :type model: type[T]
-        :returns: View of model class or reference to it.
-        :rtype: type[View[T] | T] | ForwardRef
+        :param model: Model class to derive the view from.
+        :returns: View class or forward reference for ``model``.
         """
         try:
             return cast(type[View[T]] | ForwardRef, self._views[model])
@@ -119,10 +115,10 @@ class Builder:
 
     def build_from_model[T: BaseModel](self, model: type[T]) -> type[View[T] | T]:
         """
-        Builds a view from model
+        Build the concrete view class from the provided model.
 
-        :param model: Model class.
-        :returns: View of model class.
+        :param model: Model class to derive the view from.
+        :returns: Generated view class for the model.
         """
         from pydantic._internal._config import ConfigWrapper  # type: ignore
 
@@ -300,13 +296,15 @@ class Builder:
 
 def BuilderCreate(view_name: str = "Create") -> Builder:
     """
-    Default builder for `Create` view. Views created by it keep fields with
-    :obj:`access mode <pydantic_views.AccessMode>` :obj:`~pydantic_views.AccessMode.READ_AND_WRITE`,
-    :obj:`~pydantic_views.AccessMode.WRITE_ONLY` and :obj:`~pydantic_views.AccessMode.WRITE_ONLY_ON_CREATION`.
-    And hide default :obj:`None` value. It produces a better schema examples.
+    Default builder for ``Create`` views.
+
+    Keeps fields with :obj:`access mode <pydantic_views.AccessMode>`
+    :obj:`~pydantic_views.AccessMode.READ_AND_WRITE`,
+    :obj:`~pydantic_views.AccessMode.WRITE_ONLY`, and
+    :obj:`~pydantic_views.AccessMode.WRITE_ONLY_ON_CREATION`, hiding default ``None`` values.
 
     :param view_name: View name.
-    :returns: Builder configured for `Create` views.
+    :returns: Builder configured for ``Create`` views.
     """
     return Builder(
         view_name,
@@ -321,13 +319,15 @@ def BuilderCreate(view_name: str = "Create") -> Builder:
 
 def BuilderCreateResult(view_name: str = "CreateResult") -> Builder:
     """
-    Default builder for `CreateResult` view. Views created by it keep fields with
-    :obj:`access mode <pydantic_views.AccessMode>` :obj:`~pydantic_views.AccessMode.READ_AND_WRITE`,
-    :obj:`~pydantic_views.AccessMode.READ_ONLY` and :obj:`~pydantic_views.AccessMode.READ_ONLY_ON_CREATION`.
-    And includes computed fields.
+    Default builder for ``CreateResult`` views.
+
+    Keeps fields with :obj:`access mode <pydantic_views.AccessMode>`
+    :obj:`~pydantic_views.AccessMode.READ_AND_WRITE`,
+    :obj:`~pydantic_views.AccessMode.READ_ONLY`, and
+    :obj:`~pydantic_views.AccessMode.READ_ONLY_ON_CREATION`, and includes computed fields.
 
     :param view_name: View name.
-    :returns: Builder configured for `CreateResult` views.
+    :returns: Builder configured for ``CreateResult`` views.
     """
     return Builder(
         view_name,
@@ -342,12 +342,14 @@ def BuilderCreateResult(view_name: str = "CreateResult") -> Builder:
 
 def BuilderUpdate(view_name: str = "Update") -> Builder:
     """
-    Default builder for `Update` view. Views created by it keep fields with
-    :obj:`access mode <pydantic_views.AccessMode>` :obj:`~pydantic_views.AccessMode.READ_AND_WRITE`
-    and :obj:`~pydantic_views.AccessMode.WRITE_ONLY`. And make all fields optional.
+    Default builder for ``Update`` views.
+
+    Keeps fields with :obj:`access mode <pydantic_views.AccessMode>`
+    :obj:`~pydantic_views.AccessMode.READ_AND_WRITE` and
+    :obj:`~pydantic_views.AccessMode.WRITE_ONLY`, and makes all fields optional.
 
     :param view_name: View name.
-    :returns: Builder configured for `Update` views.
+    :returns: Builder configured for ``Update`` views.
     """
     return Builder(
         view_name,
@@ -358,12 +360,14 @@ def BuilderUpdate(view_name: str = "Update") -> Builder:
 
 def BuilderLoad(view_name: str = "Load") -> Builder:
     """
-    Default builder for `Load` view. Views created by it keep fields with
-    :obj:`access mode <pydantic_views.AccessMode>` :obj:`~pydantic_views.AccessMode.READ_AND_WRITE`
-    and :obj:`~pydantic_views.AccessMode.READ_ONLY`. And includes computed fields.
+    Default builder for ``Load`` views.
+
+    Keeps fields with :obj:`access mode <pydantic_views.AccessMode>`
+    :obj:`~pydantic_views.AccessMode.READ_AND_WRITE` and
+    :obj:`~pydantic_views.AccessMode.READ_ONLY`, and includes computed fields.
 
     :param view_name: View name.
-    :returns: Builder configured for `Load` views.
+    :returns: Builder configured for ``Load`` views.
     """
     return Builder(
         view_name,
@@ -380,7 +384,7 @@ def ensure_model_views[T: BaseModel](model: type[T]):
     Ensures model has a view manager and returns it.
 
     :param model: Model class.
-    :returns: Views manager for model class.
+    :returns: Views manager for the model class.
     """
 
     try:

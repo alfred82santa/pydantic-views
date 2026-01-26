@@ -21,22 +21,20 @@ BUILDER_RUN?=${BUILDER_EXECUTABLE} run
 
 # Recipes ************************************************************************************
 .PHONY: python-help requirements beautify lint tests clean pull-request publish  \
-		flake sort-imports
+		flake8 
 
 python-help:
-	@echo "Python options"
+	@echo "Python targets"
 	@echo "-----------------------------------------------------------------------"
-	@echo "python-help:             This help"
-	@echo "requirements:            Install package requirements"
-	@echo "black:                   Reformat code using Black"
-	@echo "beautify-imports:        Reformat and sort imports"
-	@echo "beautify:                Reformat code (beautify-imports + black)"
-	@echo "lint:                    Check code format"
-	@echo "tests:                   Run tests with coverage"
-	@echo "clean:                   Clean compiled files"
-	@echo "pull-request:            Helper to run when a pull request is made"
-	@echo "sort-imports:            Sort imports"
-	@echo "build-doc-html:          Build documentation HTML files"
+	@printf "%-22s %s\n" "python-help" "Show this help"
+	@printf "%-22s %s\n" "requirements" "Install package requirements"
+	@printf "%-22s %s\n" "beautify" "Reformat code (ruff fix + format)"
+	@printf "%-22s %s\n" "lint" "Run ruff lint checks"
+	@printf "%-22s %s\n" "tests" "Run tests with coverage"
+	@printf "%-22s %s\n" "clean" "Remove build, cache, coverage artifacts"
+	@printf "%-22s %s\n" "pull-request" "Run lint and tests"
+	@printf "%-22s %s\n" "build" "Build the package"
+	@printf "%-22s %s\n" "publish" "Publish to configured PyPI repo"
 
 # Code recipes
 requirements:

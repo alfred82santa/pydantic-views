@@ -1,3 +1,10 @@
+"""
+Public package surface for pydantic-views.
+
+This module re-exports the main classes, builders, and annotations so users can import
+from :mod:`pydantic_views` directly.
+"""
+
 from .annotations import (
     AccessMode,
     Hidden,

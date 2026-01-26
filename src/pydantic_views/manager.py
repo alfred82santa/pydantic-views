@@ -10,14 +10,16 @@ if TYPE_CHECKING:
 
 
 class Manager[TModel: BaseModel]:
-    """
-    Views manager for a given model class.
-    """
+    """Registry and factory for views derived from a model class."""
 
     __slots__ = ("_model", "_views")
 
     def __init__(self, model: type[TModel]):
-        """ """
+        """
+        Initialize a manager for the given model type.
+
+        :param model: Base model class that views will be derived from.
+        """
         self._model = ref(model)
         self._views: dict[str, type[View[TModel] | TModel]] = {}
 
@@ -26,7 +28,7 @@ class Manager[TModel: BaseModel]:
         """
         Associated model class.
 
-        :returns: Model class associated.
+        :returns: Model class associated with this manager.
         """
         result = self._model()
         if not result:  # pragma: no cover
@@ -38,7 +40,7 @@ class Manager[TModel: BaseModel]:
         Get a model view.
 
         :param view_name: Name of view to get.
-        :returns: View of model class.
+        :returns: View class registered under ``view_name``.
         """
         return self._views[view_name]
 
@@ -46,8 +48,8 @@ class Manager[TModel: BaseModel]:
         """
         Set a model view.
 
-        :param view_name: Name of view to get.
-        :param view: View of model class.
+        :param view_name: Name to register the view under.
+        :param view: View class to associate with the name.
         """
         self._views[view_name] = view
 
@@ -55,8 +57,8 @@ class Manager[TModel: BaseModel]:
         """
         Build view class for Manager's model.
 
-        :param builder: Builder to use to make the view of model.
-        :returns: View of model class.
+        :param builder: Builder used to generate the view for the managed model.
+        :returns: Newly built view class registered under the builder name.
         """
         view = builder.build_from_model(self.model)
         self[builder.view_name] = view
