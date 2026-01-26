@@ -2,8 +2,6 @@
 
 PACKAGE_COVERAGE=$(PACKAGE_DIR)
 
-ISORT_PARAMS?=
-
 # Minimum coverage
 COVER_MIN_PERCENTAGE=95
 
@@ -17,13 +15,13 @@ else
 _PYPI_PUBLISH_ARGS=
 endif
 
-POETRY_EXECUTABLE?=poetry
-POETRY_RUN?=${POETRY_EXECUTABLE} run
+BUILDER_EXECUTABLE?=uv
+BUILDER_RUN?=${BUILDER_EXECUTABLE} run
 
 
 # Recipes ************************************************************************************
-.PHONY: python-help requirements black beautify-imports beautify lint tests clean pull-request  publish  \
-		flake autopep sort-imports
+.PHONY: python-help requirements beautify lint tests clean pull-request publish  \
+		flake sort-imports
 
 python-help:
 	@echo "Python options"
@@ -42,31 +40,19 @@ python-help:
 
 # Code recipes
 requirements:
-	${POETRY_EXECUTABLE} install --no-interaction --no-ansi --all-extras --without=docs
+	${BUILDER_EXECUTABLE} sync --locked --all-extras --no-group docs
 
-black:
-	${POETRY_RUN} ruff format .
-
-beautify-imports:
-	${POETRY_RUN} autoflake --remove-all-unused-imports -j 4 --in-place --remove-duplicate-keys -r ${PACKAGE_DIR} ${PACKAGE_TESTS_DIR}
-	${POETRY_RUN} isort ${ISORT_PARAMS} ${PACKAGE_DIR}
-	${POETRY_RUN} isort ${ISORT_PARAMS} ${PACKAGE_TESTS_DIR}
-	${POETRY_RUN} isort ${ISORT_PARAMS} ${PACKAGE_DOCS_SRC_DIR}
-	${POETRY_RUN} absolufy-imports --never $(shell find ${PACKAGE_DIR}  -not -path "*__pycache__*" | grep .py$)
-	${POETRY_RUN} absolufy-imports --never $(shell find ${PACKAGE_TESTS_DIR}  -not -path "*__pycache__*" | grep .py$)
-
-beautify: beautify-imports black
+beautify:
+	${BUILDER_RUN} ruff check --fix .
+	${BUILDER_RUN} ruff format .
 
 lint:
-	@echo "Running flake8 tests..."
-	${POETRY_RUN} ruff check .
-	${POETRY_RUN} flake8 .
-	${POETRY_RUN} isort -c ${ISORT_PARAMS} .
+	@echo "Running ruff tests..."
+	${BUILDER_RUN} ruff check .
 
 tests:
 	@echo "Running tests..."
-	@# echo "NO TESTS"
-	@${POETRY_RUN} pytest -v -s --cov-report term-missing --cov-report xml --cov-fail-under=${COVER_MIN_PERCENTAGE} --cov=${PACKAGE_COVERAGE} --exitfirst
+	@${BUILDER_RUN} pytest -v -s --cov-report term-missing --cov-report xml --cov-fail-under=${COVER_MIN_PERCENTAGE} --cov=${PACKAGE_COVERAGE} --exitfirst
 
 clean:
 	@echo "Cleaning compiled files..."
@@ -84,7 +70,7 @@ clean:
 pull-request: lint tests
 
 build:
-	${POETRY_EXECUTABLE} build
+	${BUILDER_EXECUTABLE} build
 
 publish: #build
-	${POETRY_EXECUTABLE} publish ${_PYPI_PUBLISH_ARGS} --username="${PYPI_REPO_USERNAME}" --password="${PYPI_REPO_PASSWORD}"
+	${BUILDER_EXECUTABLE} publish ${_PYPI_PUBLISH_ARGS} --username="${PYPI_REPO_USERNAME}" --password="${PYPI_REPO_PASSWORD}"

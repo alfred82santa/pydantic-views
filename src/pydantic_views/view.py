@@ -86,9 +86,7 @@ def model_apply[T: BaseModel](orig: T, view: View[T] | T) -> T:
             getattr(orig, field),
             getattr(view, field),
         )
-        update_data[field] = getattr(
-            orig.__pydantic_validator__.validate_assignment(orig, field, value), field
-        )
+        update_data[field] = getattr(orig.__pydantic_validator__.validate_assignment(orig, field, value), field)
     return orig.model_copy(
         update=update_data,
         deep=True,
@@ -96,32 +94,24 @@ def model_apply[T: BaseModel](orig: T, view: View[T] | T) -> T:
 
 
 @overload
-def _merge_values[T: BaseModel](
-    orig_value: None, new_value: T
-) -> T | dict[str, Any]: ...
+def _merge_values[T: BaseModel](orig_value: None, new_value: T) -> T | dict[str, Any]: ...
 
 
 @overload
-def _merge_values[T: BaseModel, A](orig_value: None, new_value: A) -> A: ...
+def _merge_values[A](orig_value: None, new_value: A) -> A: ...
 
 
 @overload
-def _merge_values[T: BaseModel, A](
-    orig_value: T, new_value: View[T]
-) -> T | dict[str, Any]: ...
+def _merge_values[T: BaseModel](orig_value: T, new_value: View[T]) -> T | dict[str, Any]: ...
 
 
-def _merge_values[T: BaseModel, A](
-    orig_value: T | None, new_value: View[T] | A
-) -> T | A | dict[str, Any]:
+def _merge_values[T: BaseModel, A](orig_value: T | None, new_value: View[T] | A) -> T | A | dict[str, Any]:
     if isinstance(new_value, BaseModel):
         if isinstance(orig_value, BaseModel):
             return cast(T, model_apply(orig_value, new_value))
         if isinstance(new_value, View):
             return cast(View[T], new_value).view_build_to()
-        return new_value.model_dump(
-            exclude_unset=True, exclude_defaults=True, by_alias=True
-        )
+        return new_value.model_dump(exclude_unset=True, exclude_defaults=True, by_alias=True)
     elif isinstance(new_value, Mapping) and isinstance(orig_value, Mapping):
         data: dict[str, Any] = dict(cast(Mapping[str, Any], orig_value))
         for k, v in cast(Mapping[str, Any], new_value).items():

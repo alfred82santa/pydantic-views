@@ -1,11 +1,12 @@
 from collections.abc import Iterable, Mapping
 from copy import deepcopy
+from functools import reduce
 from types import NoneType, UnionType
-from typing import (  # type: ignore[deprecated]
+from typing import (
+    Annotated,
     Any,
     ForwardRef,
     Literal,
-    Union,
     cast,
     get_args,
     get_origin,
@@ -23,7 +24,7 @@ from .view import RootView, View
 
 class Builder:
     """
-    View builder. It create a view classes from models following given criterias.
+    View builder. It create a view classes from models following given criteria.
     """
 
     def __init__(
@@ -39,7 +40,7 @@ class Builder:
         :param view_name: View name.
         :param access_modes: Access modes to filter for.
         :param all_optional: Make all fields optionals. On updates it allows to send just fields you want to change.
-        :param all_nullable: Make all fields nulleables. On some kinds of updates it could meant set default value.
+        :param all_nullable: Make all fields nullable. On some kinds of updates it could meant set default value.
         :param hide_default_null: Hide :obj:`None` as default value. It produces better examples.
         :param include_computed_fields: Whether computed fields must be included on view or not.
         """
@@ -65,16 +66,14 @@ class Builder:
             result = manager.build_view(self)
 
         [
-            v.model_rebuild()  # type: ignore
+            v.model_rebuild(raise_errors=False)  # type: ignore
             for v in self._views.values()
             if not isinstance(v, ForwardRef)
         ]
 
         return result
 
-    def get_view_ref[T: BaseModel](
-        self, model: type[T]
-    ) -> type[View[T] | T] | ForwardRef:
+    def get_view_ref[T: BaseModel](self, model: type[T]) -> type[View[T] | T] | ForwardRef:
         """
         Returns a view of model or a forward reference to it.
 
@@ -101,7 +100,7 @@ class Builder:
 
     def _filter_field(self, f_info: FieldInfo):
         am = {m for m in f_info.metadata if isinstance(m, AccessMode)}
-        return len((am & set(self.access_modes))) == 0 and len(am) > 0
+        return len(am & set(self.access_modes)) == 0 and len(am) > 0
 
     def _iter_fields[T: BaseModel](self, model: type[T]):
         for f_name, f_info in model.model_fields.items():
@@ -114,9 +113,7 @@ class Builder:
 
     def _iter_computed_fields[T: BaseModel](self, model: type[T]):
         for f_name, cf_info in model.model_computed_fields.items():
-            if self._filter_computed_field(
-                cf_info
-            ):  # [TODO] does it have sense? #  pragma: no cover
+            if self._filter_computed_field(cf_info):  # [TODO] does it have sense? #  pragma: no cover
                 continue
             yield f_name, cf_info
 
@@ -127,7 +124,7 @@ class Builder:
         :param model: Model class.
         :returns: View of model class.
         """
-        from pydantic._internal._config import ConfigWrapper
+        from pydantic._internal._config import ConfigWrapper  # type: ignore
 
         view_name = model.__name__ + self.view_name[0].upper() + self.view_name[1:]
         try:
@@ -148,7 +145,6 @@ class Builder:
             model_fields: dict[str, tuple[type[Any] | None, FieldInfo]] = {}
             for f_name, f_info in self._iter_fields(model):
                 model_fields[f_name] = self._map_field_info(
-                    f_info.annotation,
                     f_info,
                     ignore_nullable=issubclass(model, RootModel),
                 )
@@ -164,7 +160,7 @@ class Builder:
                 class _RootView(RootView[T]):
                     model_config = deepcopy(model.model_config)
 
-                    __model_class_root__ = ref(cast(type[T], model))
+                    __model_class_root__ = ref(cast(type[T], model))  # pyright: ignore[reportAssignmentType]
 
                 base_view = _RootView
 
@@ -173,7 +169,7 @@ class Builder:
                 class _View(View[T]):
                     model_config = deepcopy(model.model_config)
 
-                    __model_class_root__ = ref(cast(type[T], model))
+                    __model_class_root__ = ref(cast(type[T], model))  # pyright: ignore[reportAssignmentType]
 
                 _View.model_config["protected_namespaces"] = tuple(
                     {
@@ -187,10 +183,7 @@ class Builder:
             params: dict[str, Any] = {
                 "__module__": model.__module__,
                 "__base__": base_view,
-                "__doc__": (
-                    f"View `{self.view_name}` "
-                    f"of model :class:`~{model.__module__}.{model.__qualname__}`"
-                ),
+                "__doc__": (f"View `{self.view_name}` of model :class:`~{model.__module__}.{model.__qualname__}`"),
                 **model_fields,
             }
 
@@ -208,16 +201,13 @@ class Builder:
 
     def _map_field_info(
         self,
-        annotation: type[Any] | None,
         f_info: FieldInfo,
         *,
         ignore_nullable: bool = False,
     ) -> tuple[type[Any] | None, FieldInfo]:
         f_info = FieldInfo.merge_field_infos(
             f_info,
-            annotation=self._map_annotation(
-                f_info.annotation, ignore_nullable=ignore_nullable
-            ),
+            annotation=self._map_annotation(f_info.annotation, ignore_nullable=ignore_nullable),
             metadata=[m for m in f_info.metadata if not isinstance(m, AccessMode)],
         )
 
@@ -239,10 +229,10 @@ class Builder:
 
     def _map_annotation(
         self, annotation: type[Any] | None, *, ignore_nullable: bool = False
-    ) -> type[Any] | ForwardRef | None | UnionType:
+    ) -> type[Any] | ForwardRef | NoneType | UnionType:
         def finish_annotation(a: type[Any] | None) -> type[Any] | None | UnionType:
             if not ignore_nullable and self.all_nullable and a is not Ellipsis:  # type: ignore
-                return Union[a, None]  # type: ignore
+                return a | None  # type: ignore
 
             return a
 
@@ -252,19 +242,15 @@ class Builder:
         except TypeError:
             pass
 
-        origin = get_origin(annotation)
+        origin: type | Annotated = get_origin(annotation)
         type_args = get_args(annotation)
 
         if origin is None:
             return finish_annotation(annotation)
 
-        if origin is not Union and not (
-            isinstance(origin, type) and issubclass(origin, UnionType)
-        ):
+        if origin is not UnionType and not (isinstance(origin, type) and issubclass(origin, UnionType)):
             if origin is Literal:
-                return origin[
-                    *(self._map_annotation(t, ignore_nullable=True) for t in type_args)
-                ]  # type: ignore
+                return origin[*(self._map_annotation(t, ignore_nullable=True) for t in type_args)]  # type: ignore
 
             elif isinstance(origin, type):
                 if issubclass(origin, Mapping):
@@ -278,9 +264,7 @@ class Builder:
                     return finish_annotation(
                         origin[  # type: ignore
                             *(
-                                self._map_annotation(
-                                    t, ignore_nullable=issubclass(origin, (list, set))
-                                )
+                                self._map_annotation(t, ignore_nullable=issubclass(origin, (list, set)))
                                 for t in type_args
                             )
                         ]
@@ -289,17 +273,12 @@ class Builder:
                 origin[*(self._map_annotation(t) for t in type_args)]  # type: ignore
             )
 
-        return Union[  # type: ignore
-            *(
-                self._map_annotation(a)
-                for a in type_args
-                if a is not NoneType or not self.hide_default_null
-            )
-        ]
+        return reduce(
+            lambda a, b: a | b,
+            [a for a in type_args if a is not NoneType or not self.hide_default_null],
+        )
 
-    def _map_computed_field_info(
-        self, cf_info: ComputedFieldInfo
-    ) -> tuple[type[Any] | None, FieldInfo]:
+    def _map_computed_field_info(self, cf_info: ComputedFieldInfo) -> tuple[type[Any] | None, FieldInfo]:
         return (
             cf_info.return_type,
             FieldInfo(
@@ -405,18 +384,12 @@ def ensure_model_views[T: BaseModel](model: type[T]):
     """
 
     try:
-        if (
-            manager := cast(Manager[T], getattr(model, "model_views"))
-        ) and manager.model == model:
+        if (manager := cast(Manager[T], model.model_views)) and manager.model == model:  # type: ignore
             return manager
     except AttributeError:
         pass
 
     manager = Manager(model)
-    setattr(
-        model,
-        "model_views",
-        manager,
-    )
+    model.model_views = manager  # type: ignore
 
     return manager

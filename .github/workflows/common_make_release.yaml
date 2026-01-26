@@ -37,11 +37,11 @@ jobs:
 
       - name: Build package
         run: |
-          poetry build
+          uv build
 
       - name: Publish package
         run: |
-          poetry publish --username=__token__ --password=${{ secrets.PYPI_API_TOKEN }}
+          uv publish --username=__token__ --password=${{ secrets.PYPI_API_TOKEN }}
           
       - name: Make release
         id: make_release

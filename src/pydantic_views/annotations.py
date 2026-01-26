@@ -1,5 +1,5 @@
 from enum import Enum, auto
-from typing import Annotated, TypeAlias, TypeVar
+from typing import Annotated, TypeVar
 
 T = TypeVar("T")
 
@@ -29,7 +29,7 @@ class AccessMode(Enum):
 
 
 #: Read and write field annotation. Field could be read and written always.
-ReadAndWrite: TypeAlias = Annotated[T, AccessMode.READ_AND_WRITE]
+ReadAndWrite = Annotated[T, AccessMode.READ_AND_WRITE]
 
 #: Read only field annotation. Field could be read always but never written.
 ReadOnly = Annotated[T, AccessMode.READ_ONLY]
