@@ -6,9 +6,7 @@ from pydantic import BaseModel, RootModel
 
 
 class View[T: BaseModel](BaseModel):
-    """
-    View of model.
-    """
+    """Lightweight view over a base Pydantic model with helper builders and mergers."""
 
     __model_class_root__: ClassVar[ReferenceType[type[BaseModel]]]
 
@@ -24,9 +22,9 @@ class View[T: BaseModel](BaseModel):
     @classmethod
     def view_class_root(cls) -> type[T]:
         """
-        Returns the class object associated to the view.
+        Return the base model class this view was generated from.
 
-        :returns: Associated model class.
+        :returns: Associated base model class.
         """
 
         root = cls.__model_class_root__()
@@ -39,18 +37,18 @@ class View[T: BaseModel](BaseModel):
     @classmethod
     def view_build_from(cls, model: T):
         """
-        Build view from given model.
+        Create a view instance from a model instance, omitting unset fields.
 
-        :param model: Model class to build view from.
-        :returns: View of model class.
+        :param model: Model instance to build the view from.
+        :returns: View populated with the model data.
         """
         return cls.model_validate(model.model_dump(exclude_unset=True, by_alias=True))
 
     def view_build_to(self) -> T:
         """
-        Build associated model from view data.
+        Build the associated model instance using only fields set on the view.
 
-        :returns: Associated model instance with view data.
+        :returns: Model instance created from the view data.
         """
 
         return self.view_class_root().model_validate(
@@ -59,24 +57,26 @@ class View[T: BaseModel](BaseModel):
 
     def view_apply_to(self, model: T) -> T:
         """
-        Apply view data to associated model.
+        Merge the view data into an existing model instance, returning a copy.
 
-        :param model: Model instance to use as base..
-        :returns: Associated model instance with view data merged to given model data.
+        :param model: Model instance used as the base.
+        :returns: New model instance with the view data applied.
         """
 
         return model_apply(model, self)
 
 
 class RootView[R](View[RootModel[R]], RootModel[R]):
-    """
-    View for root models.
-    """
+    """View wrapper specialized for ``RootModel`` instances."""
 
 
 def model_apply[T: BaseModel](orig: T, view: View[T] | T) -> T:
     """
-    Merge view or model into model
+    Return a copy of ``orig`` updated with fields set on ``view`` (model or view).
+
+    :param orig: Original model instance to update.
+    :param view: View or model supplying updated values.
+    :returns: New model instance with merged data.
     """
 
     update_data: dict[str, Any] = {}

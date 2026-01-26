@@ -8,7 +8,7 @@
 
 from importlib import metadata
 
-project = "View for Pydantic models"
+project = "Views for Pydantic models"
 copyright = "2025, Alfred Santacatalina"
 author = "Alfred Santacatalina"
 release = metadata.version("pydantic-views")

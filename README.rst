@@ -20,15 +20,15 @@
 
 .. start-doc
 
-======================================
-View for Pydantic models documentation
-======================================
+===============================
+Typed views for Pydantic models
+===============================
 
-This package provides a simple way to create `views` from `pydantic <https://docs.pydantic.dev/latest/>`_ models. A view is
-another `pydantic <https://docs.pydantic.dev/latest/>`_ models with some of field of original model. So, for example, 
-read only fields does not appears on `Create` or `Update` views.
+pydantic-views lets you derive focused, type-safe Pydantic models ("views") from a base model.
+Each view exposes only the fields appropriate for a given operation—create, update, load, or a custom flow—so you avoid
+hand-maintaining parallel schemas.
 
-As rest service definition you could do:
+Typical service signatures become easy to express:
 
 .. code-block:: python
 
@@ -46,13 +46,12 @@ As rest service definition you could do:
 Features
 --------
 
-- Unlimited views per model.
-- Create view for referenced inner models.
-- It is possible to set a view manually.
-- Tested code.
-- Full typed.
-- Opensource.
-  
+- Unlimited views per model (create, update, load, custom).
+- Works on nested models; referenced models get views too.
+- Builders for common patterns, or define views manually.
+- Fully typed with shipped ``py.typed`` and tests.
+- Open source and published on PyPI.
+
 
 ------------
 Installation
@@ -70,44 +69,50 @@ Using `poetry <https://python-poetry.org/>`_:
 
    poetry add pydantic-views
 
+Using `uv <https://docs.astral.sh/uv/>`_:
+
+.. code-block:: bash
+
+   uv add pydantic-views
+
 
 ----------
-How to use
+Quickstart
 ----------
 
-When you define a pydantic model you must mark the access model for each field. It means
-you should use our `annotations <https://pydantic-views.readthedocs.io/latest/api.html#field-annotations>`_ to define field typing.
+Mark each field with its access mode using the provided `annotations <https://pydantic-views.readthedocs.io/latest/api.html#field-annotations>`_.
+Unmarked fields default to read/write.
 
 .. code-block:: python
 
    from typing import Annotated
-   from pydantic import BaseModel, gt
-   from pydantic_views import ReadOnly, ReadOnlyOnCreation, Hidden, AccessMode
+
+   from pydantic import BaseModel, computed_field, gt
+   from pydantic_views import AccessMode, Hidden, ReadOnly, ReadOnlyOnCreation
 
    class ExampleModel(BaseModel):
-
-       # No marked fields are treated like ReadAndWrite fields.
+       # Unmarked fields are read/write everywhere.
        field_str: str
 
-       # Read only fields are removed on view for create and update views.
+       # Read-only fields are removed from create and update views.
        field_read_only_str: ReadOnly[str]
 
-       # Read only on creation fields are removed on view for create, update and load views. 
-       # But it is shown on create result view.
+       # Read-only-on-creation fields are hidden on create, update and load views,
+       # but appear on create-result views.
        field_api_secret: ReadOnlyOnCreation[str]
 
-       # It is possible to set more than one access mode and to use annotation standard pattern.
+       # Combine access modes with Annotated and keep validators (gt in this case).
        field_int: Annotated[int, AccessMode.READ_ONLY, AccessMode.WRITE_ONLY_ON_CREATION, gt(5)]
 
-       # Hidden field do not appears in any view.
+       # Hidden fields never appear.
        field_hidden_int: Hidden[int]
 
-       # Computed fields only appears on reading views.
+       # Computed fields appear only on read views.
        @computed_field
        def field_computed_field(self) -> int:
            return self.field_hidden_int * 5
 
-So, in order to build a `Load` view it is so simple:
+Build a load view:
 
 .. code-block:: python
 
@@ -115,7 +120,7 @@ So, in order to build a `Load` view it is so simple:
 
    ExampleModelLoad = BuilderLoad().build_view(ExampleModel)
 
-It is equivalent to:
+Which is equivalent to:
 
 
 .. code-block:: python
@@ -128,7 +133,7 @@ It is equivalent to:
        field_int: Annotated[int, gt(5)]
        field_computed_field: int
 
-In same way to build a `Update` view you must do:
+To build an update view:
 
 .. code-block:: python
 
@@ -136,19 +141,18 @@ In same way to build a `Update` view you must do:
 
    ExampleModelUpdate = BuilderUpdate().build_view(ExampleModel)
    
-It is equivalent to:
+Which is equivalent to:
 
 .. code-block:: python
 
-   from pydantic import PydanticUndefined
+   from pydantic import Field, PydanticUndefined
    from pydantic_views import View
 
    class ExampleModelUpdate(View[ExampleModel]):
        field_str: str = Field(default_factory=lambda: PydanticUndefined)
 
-As you can see, on `Update` view all fields has a default factory returning `PydanticUndefined`
-in order to make them optionals. And when an update view is applied to a given model, the fields that are 
-not set (use default value) will not be applied to the model.
+On ``Update`` views every field uses a default factory that returns ``PydanticUndefined``,
+so fields become optional. Applying the view to a model only updates values that were set.
 
 .. code-block:: python
 
@@ -168,7 +172,7 @@ not set (use default value) will not be applied to the model.
    assert updated_model.field_str == "new_data"
 
 
-But if a field is not set on update view, the original value is kept.
+If a field is not set on the update view, the original value is kept.
 
 .. code-block:: python
 
