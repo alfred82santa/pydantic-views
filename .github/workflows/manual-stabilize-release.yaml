@@ -1,0 +1,30 @@
+name: Stabilize Release (create release branch)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  create-release-branch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 1
+          
+      - uses: ./.github/actions/setup-repo
+
+      - name: Get current version
+        id: current-version
+        run: |
+          echo "version=$(make version | sed 's/^\([0-9]\+\.[0-9]\+\).*$/\1/')" >> "$GITHUB_OUTPUT"
+
+      - uses: peterjgrainger/action-create-branch@v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.ACTION_GITHUB_TOKEN }}
+        with:
+          branch: 'release/${{ steps.current-version.outputs.version }}'
