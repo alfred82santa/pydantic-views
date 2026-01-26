@@ -40,7 +40,7 @@ python-help:
 
 # Code recipes
 requirements:
-	${BUILDER_EXECUTABLE} install --no-interaction --no-ansi --all-extras --without=docs
+	${BUILDER_EXECUTABLE} sync --locked --all-extras --no-group docs
 
 beautify:
 	${BUILDER_RUN} ruff check --fix .
