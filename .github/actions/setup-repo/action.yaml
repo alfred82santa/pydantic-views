@@ -13,7 +13,6 @@ runs:
   using: composite
   steps:
     - name: Setup uv
-      if: inputs.uv-version
       uses: astral-sh/setup-uv@v7
       with:
         version: ${{ inputs.uv-version }}
