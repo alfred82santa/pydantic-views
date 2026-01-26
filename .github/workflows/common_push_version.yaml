@@ -33,7 +33,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           ref: ${{ inputs.ref }}
@@ -46,7 +46,7 @@ jobs:
           level: ${{ inputs.level }}
 
       - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v8
         with:
           title: "Bump version to ${{ steps.define-version.outputs.version }}"
           branch: "task/start-version-${{ steps.define-version.outputs.version }}"
@@ -56,4 +56,5 @@ jobs:
             :crown: *Automatic PR starting new version*
           labels: automated,bot
           base: ${{ inputs.ref }}
-          add-paths: pyproject.toml         
+          add-paths: pyproject.toml        
+          token: ${{ secrets.ACTION_GITHUB_TOKEN }} 
