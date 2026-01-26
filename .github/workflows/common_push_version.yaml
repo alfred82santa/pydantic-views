@@ -56,5 +56,7 @@ jobs:
             :crown: *Automatic PR starting new version*
           labels: automated,bot
           base: ${{ inputs.ref }}
-          add-paths: pyproject.toml        
+          add-paths: |
+            pyproject.toml 
+            uv.lock       
           token: ${{ secrets.ACTION_GITHUB_TOKEN }} 
