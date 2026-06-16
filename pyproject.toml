@@ -1,6 +1,6 @@
 [project]
 name = "pydantic-views"
-version = "0.5.0"
+version = "0.6.0"
 description = "Views for Pydantic models"
 authors = [
     {name = "Alfred",email = "alfred82santa@gmail.com"}
