@@ -21,4 +21,5 @@ docs/build
 .pytest_cache
 .ruff_cache
 .venv
-.vscode
+
+uv.lock
