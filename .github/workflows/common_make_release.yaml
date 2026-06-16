@@ -9,14 +9,30 @@ on:
         default: "none"
         type: string
 
-permissions:
-  contents: write
+      environment:
+        description: "Release environment (e.g. pypi, testpypi, etc.)"
+        required: false
+        default: "pypi"
+        type: string
 
+      pypi-github-token:
+        description: "PyPI Github token"
+        required: true
+        type: string
 jobs:
   release:
     name: Make release
     # The type of runner that the job will run on
     runs-on: ubuntu-latest
+
+    environment:
+      name: ${{ inputs.environment }}
+      url: https://pypi.org/project/llimona-azure-openai/
+
+    permissions:
+      contents: write
+      id-token: write
+      pull-requests: none
 
     outputs:
       version: ${{ steps.define-version.outputs.version }}
@@ -26,7 +42,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          fetch-depth: 0
+          fetch-depth: 1
 
       - uses: ./.github/actions/setup-repo
 
@@ -39,9 +55,9 @@ jobs:
         run: |
           uv build
 
-      - name: Publish package
-        run: |
-          uv publish --username=__token__ --password=${{ secrets.PYPI_API_TOKEN }}
+      - name: Publish package distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
           
       - name: Make release
         id: make_release
@@ -51,5 +67,22 @@ jobs:
           RELEASE_TITLE: Release ${{ steps.define-version.outputs.version }}
         run: |
           gh release create $TAG_NAME --target ${{ github.sha }} -t "$RELEASE_TITLE" ${{ (inputs.level != 'none') && '--prerelease' || '' }} --generate-notes
+          gh release upload $TAG_NAME dist/* --clobber
           echo "release=$TAG_NAME" >> "$GITHUB_OUTPUT"
           echo "**Tag:** [$TAG_NAME]("$(gh release view $TAG_NAME --json url --jq ".url")")" >> $GITHUB_STEP_SUMMARY
+
+  bump-version:
+    name: Bump version
+    needs: release
+
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: none
+
+    if:
+      github.ref_name == needs.release.outputs.release-ref && inputs.level == 'none'
+    uses: ./.github/workflows/common_push_version.yaml
+    with:
+      ref: ${{ github.ref_name }}
+      level: 'patch'

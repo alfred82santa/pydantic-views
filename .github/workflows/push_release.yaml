@@ -16,11 +16,9 @@ permissions:
 jobs:
   get-version:
     uses: ./.github/workflows/common_get_version.yaml
-    secrets: inherit
 
   get-main-version:
     uses: ./.github/workflows/common_get_version.yaml
-    secrets: inherit
     with:
       ref: main
 
@@ -33,4 +31,5 @@ jobs:
     with:
       level: 'minor'
       ref: main
-    secrets: inherit
+    secrets:
+      ACTIONS_GITHUB_TOKEN_PULL_REQUEST: ${{ secrets.ACTIONS_GITHUB_TOKEN_PULL_REQUEST }}

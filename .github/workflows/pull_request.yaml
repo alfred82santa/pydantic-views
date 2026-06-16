@@ -11,9 +11,6 @@ on:
       - master
       - main
       - release/*
-
-permissions:
-  contents: read
   
 concurrency:
   group: pr-code-${{ github.base_ref }}-${{ github.ref_name }}
@@ -22,19 +19,23 @@ concurrency:
   # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 
 jobs:
-  check-style:
+  validate:
     name: Check Python style and run tests
+
+    permissions:
+      contents: read
+      pull-requests: write
 
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.14", "3.13"]
+        python-version: ["3.14"]
       fail-fast: true
 
     steps:
       - uses: actions/checkout@v6
         with:
-          fetch-depth: 1
+          fetch-depth: 0
           
       - uses: ./.github/actions/setup-repo
         with:
@@ -42,16 +43,30 @@ jobs:
 
       - name: Install development requirements
         run: |
-          make requirements
+          uv sync --all-packages --all-groups
 
       - name: Run checks
-        run: make pull-request
+        run: poe validate
+
+      - name: Coverage comment
+        uses: MishaKav/pytest-coverage-comment@main
+        with:
+          pytest-xml-coverage-path: ./coverage.xml
+          junitxml-path: ./pytest.xml
+          unique-id-for-comment: ${{ matrix.python-version }}
+          title: Coverage for Python ${{ matrix.python-version }}
+
+      - name: Analyze with SonarCloud
+        uses: SonarSource/sonarqube-scan-action@v7.1.0
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}   # Generate a token on Sonarcloud.io, add it to the secrets of this repo with the name SONAR_TOKEN (Settings > Secrets > Actions > add new repository secret)
 
   success-pr:
     name: Success Pull Request
     if: ${{ always() }}
     needs:
-      - check-style
+      - validate
+    permissions: {}
     runs-on: ubuntu-latest
     steps:
       - name: Check Job Status status and fail if they are red

@@ -30,4 +30,5 @@ jobs:
     with:
       level: ${{ inputs.level }}
       ref: ${{ inputs.ref }}
-    secrets: inherit
+    secrets:
+      ACTIONS_GITHUB_TOKEN_PULL_REQUEST: ${{ secrets.ACTIONS_GITHUB_TOKEN_PULL_REQUEST }}

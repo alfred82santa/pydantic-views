@@ -107,3 +107,53 @@ docs = [
     "autodoc-pydantic>=2.2.0",
     "sphinx>=9.1.0",
 ]
+
+[tool.poe.tasks]
+build = "uv build"
+test = "pytest -v -s --junitxml=pytest.xml --cov src --cov-report term-missing --cov-report xml:coverage.xml --cov-fail-under=85 --exitfirst"
+typecheck = "mypy src"
+format = "ruff format **/src/**/*.py **/tests/**/*.py **/examples/**/*.py"
+"format:check" = "ruff format **/src/**/*.py **/tests/**/*.py **/examples/**/*.py --check"
+lint = "ruff check **/src/**/*.py **/tests/**/*.py **/examples/**/*.py"
+"lint:fix" = "ruff check **/src/**/*.py **/tests/**/*.py **/examples/**/*.py --fix"
+
+[tool.poe.tasks.clean]
+cmd = """
+rm -rf ./**/src/**/*.pyc
+       ./**/src/**/*.pyo
+       ./**/src/**/__pycache__
+       ./**/tests/**/*.pyc
+       ./**/tests/**/*.pyo
+       ./**/tests/**/__pycache__
+       .coverage
+       coverage.xml
+       pytest.xml
+       .*_cache
+"""
+empty_glob = "null"
+
+[tool.poe.tasks.validate]
+help = "Execute all validations: typecheck, lint, and test"
+sequence = ["typecheck", "format:check", "lint", "test"]
+
+[tool.poe.tasks.prebuild]
+help = "Pre-build checks: typecheck and lint"
+sequence = ["typecheck", "lint"]
+
+[tool.poe.tasks."clean:all"]
+help = "Complete cleanup: cache, coverage, and temporary files"
+sequence = ["clean", { cmd = """rm -rf dist
+                      build
+                      .coverage
+                      coverage.xml
+                      pytest.xml
+                      **/.*_cache
+            """ }]
+
+[tool.poe.tasks.fix]
+help = "Fix linting and formatting issues, then run tests"
+sequence = ["format", "lint:fix"]
+
+[tool.poe.tasks.docs]
+help = "Build the documentation"
+cmd = "sphinx-build -b html docs/source docs/build"

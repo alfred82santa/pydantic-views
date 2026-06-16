@@ -55,14 +55,15 @@ on:
         description: "Whether is a prerelease version"
         value: ${{ jobs.get_version.outputs.is-prerelease }}
 
-permissions:
-  contents: read
 
 jobs:
   get_version:
     name: Get version
     # The type of runner that the job will run on
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
 
     outputs:
       current-version: ${{ steps.define-version.outputs.current-version }}
@@ -82,7 +83,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          fetch-depth: 0
+          fetch-depth: 1
           ref: ${{ inputs.ref }}
           
       - uses: ./.github/actions/setup-repo
