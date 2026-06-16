@@ -7,6 +7,7 @@ from :mod:`pydantic_views` directly.
 
 from .annotations import (
     AccessMode,
+    AccessTag,
     Hidden,
     ReadAndWrite,
     ReadOnly,
@@ -20,6 +21,11 @@ from .builder import (
     BuilderCreateResult,
     BuilderLoad,
     BuilderUpdate,
+    CreatePreset,
+    CreateResultPreset,
+    LoadPreset,
+    Preset,
+    UpdatePreset,
     ensure_model_views,
 )
 from .manager import Manager
@@ -27,6 +33,7 @@ from .view import RootView, View
 
 __all__ = [
     "AccessMode",
+    "AccessTag",
     "ReadOnly",
     "ReadAndWrite",
     "ReadOnlyOnCreation",
@@ -38,6 +45,11 @@ __all__ = [
     "BuilderCreateResult",
     "BuilderUpdate",
     "BuilderLoad",
+    "Preset",
+    "CreatePreset",
+    "CreateResultPreset",
+    "LoadPreset",
+    "UpdatePreset",
     "ensure_model_views",
     "Manager",
     "View",

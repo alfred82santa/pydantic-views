@@ -16,3 +16,9 @@ coverage.xml
 
 # Sphinx
 docs/build
+
+.mypy_cache
+.pytest_cache
+.ruff_cache
+.venv
+.vscode

@@ -1,0 +1,555 @@
+import contextlib
+from collections.abc import Mapping
+from itertools import chain, combinations
+from typing import Annotated, Any, Literal, get_args, get_origin  # type: ignore
+
+import pytest
+from pydantic import BaseModel, Field, RootModel, computed_field
+
+from pydantic_views import RootView
+from pydantic_views.annotations import (
+    AccessMode,
+    AccessTag,
+    Hidden,
+    ReadAndWrite,
+    ReadOnly,
+    ReadOnlyOnCreation,
+    WriteOnly,
+    WriteOnlyOnCreation,
+)
+from pydantic_views.builder import (
+    Builder,
+)
+from pydantic_views.view import View
+
+
+class Model(BaseModel):
+    """
+    Test model
+    """
+
+    field_int: int = 1
+    read_only_field_int: ReadOnly[int] = Field(alias="readOnlyFieldInt", title="Read Only Field")
+    read_only_on_creation_field_int: ReadOnlyOnCreation[int] = Field(description="Read only on creation field")
+    write_only_field_int: WriteOnly[int | None] = None
+    write_only_on_creation_field_int: WriteOnlyOnCreation[int | None] = None
+    read_and_write_field_int: ReadAndWrite[int | None] = None
+    hidden_int: Hidden[int]
+
+    field_str: str
+    read_only_field_str: ReadOnly[str] = Field(deprecated="Deprecated in favor of other field")
+    read_only_on_creation_field_str: ReadOnlyOnCreation[str | None] = None
+    write_only_field_str: WriteOnly[str]
+    write_only_on_creation_field_str: WriteOnlyOnCreation[str]
+    read_and_write_field_str: ReadAndWrite[str]
+    hidden_str: Hidden[str]
+
+    literal_int: Literal[1]
+    literal_read_only_str: ReadOnly[Literal["literal"]]
+
+    @computed_field
+    def computed_field_int(self) -> int:
+        return 1
+
+
+class ListRootModel(RootModel[list[Model]]):
+    pass
+
+
+class SetRootModel(RootModel[set[Model]]):
+    pass
+
+
+class TupleVarRootModel(RootModel[tuple[Model, ...]]):
+    pass
+
+
+class TupleFixedRootModel(RootModel[tuple[Model, int]]):
+    pass
+
+
+class DictRootModel(RootModel[dict[str, Model]]):
+    pass
+
+
+class ModelComplexTypes(BaseModel):
+    """
+    Test model 2
+    """
+
+    field_list_int: list[int]
+    field_list_model: list[Model]
+
+    field_set_int: set[int]
+    field_set_model: set[Model]
+
+    field_tuple_fixed_int: tuple[int]
+    field_tuple_fixed_model: tuple[Model]
+
+    field_tuple_var_int: tuple[int, ...]
+    field_tuple_var_model: tuple[Model, ...]
+
+    field_dict_int: dict[str, int]
+    field_dict_model: dict[str, Model]
+
+    field_recurrent: list["ModelComplexTypes"]
+
+
+class ModelCircular(BaseModel):
+    recurrent: "ModelInnerCircular"
+    read_only_recurrent: ReadOnly["ModelInnerCircular"]
+    read_only_on_creation_recurrent: ReadOnlyOnCreation["ModelInnerCircular"]
+    write_only_recurrent: WriteOnly["ModelInnerCircular"]
+    write_only_on_creation_recurrent: WriteOnlyOnCreation["ModelInnerCircular"]
+    read_and_write_recurrent: ReadAndWrite["ModelInnerCircular"]
+    hidden_recurrent: Hidden["ModelInnerCircular"]
+
+
+class ModelInnerCircular(BaseModel):
+    recurrent: "ModelCircular"
+
+
+ModelCircular.model_rebuild()
+ModelInnerCircular.model_rebuild()
+
+_groups = [
+    (
+        "ReadOnly",
+        (AccessMode.READ_ONLY,),
+        {
+            "field_int",
+            "read_only_field_int",
+            "field_str",
+            "read_only_field_str",
+            "literal_int",
+            "literal_read_only_str",
+        },
+    ),
+    (
+        "WriteOnly",
+        (AccessMode.WRITE_ONLY,),
+        {
+            "field_int",
+            "write_only_field_int",
+            "field_str",
+            "write_only_field_str",
+            "literal_int",
+        },
+    ),
+    (
+        "ReadOnlyOnCreation",
+        (AccessMode.READ_ONLY_ON_CREATION,),
+        {
+            "field_int",
+            "read_only_on_creation_field_int",
+            "field_str",
+            "read_only_on_creation_field_str",
+            "literal_int",
+        },
+    ),
+    (
+        "WriteOnlyOnCreation",
+        (AccessMode.WRITE_ONLY_ON_CREATION,),
+        {
+            "field_int",
+            "write_only_on_creation_field_int",
+            "field_str",
+            "write_only_on_creation_field_str",
+            "literal_int",
+        },
+    ),
+    (
+        "ReadAndWrite",
+        (AccessMode.READ_AND_WRITE,),
+        {
+            "field_int",
+            "field_str",
+            "read_and_write_field_int",
+            "read_and_write_field_str",
+            "literal_int",
+        },
+    ),
+    (
+        "Hidden",
+        (AccessMode.HIDDEN,),
+        {
+            "field_int",
+            "field_str",
+            "hidden_int",
+            "hidden_str",
+            "literal_int",
+        },
+    ),
+]
+
+_groups_recurrent = [
+    (
+        "ReadOnly",
+        (AccessMode.READ_ONLY,),
+        {
+            "recurrent",
+            "read_only_recurrent",
+        },
+    ),
+    (
+        "WriteOnly",
+        (AccessMode.WRITE_ONLY,),
+        {
+            "recurrent",
+            "write_only_recurrent",
+        },
+    ),
+    (
+        "ReadOnlyOnCreation",
+        (AccessMode.READ_ONLY_ON_CREATION,),
+        {
+            "recurrent",
+            "read_only_on_creation_recurrent",
+        },
+    ),
+    (
+        "WriteOnlyOnCreation",
+        (AccessMode.WRITE_ONLY_ON_CREATION,),
+        {
+            "recurrent",
+            "write_only_on_creation_recurrent",
+        },
+    ),
+    (
+        "ReadAndWrite",
+        (AccessMode.READ_AND_WRITE,),
+        {
+            "recurrent",
+            "read_and_write_recurrent",
+        },
+    ),
+    (
+        "Hidden",
+        (AccessMode.HIDDEN,),
+        {
+            "recurrent",
+            "hidden_recurrent",
+        },
+    ),
+]
+
+
+class ModelTagged(BaseModel):
+    """
+    Test model with tagged fields
+    """
+
+    field_int: Annotated[int, AccessMode.READ_ONLY, AccessTag("tag1")]
+    field_str: Annotated[str, AccessMode.WRITE_ONLY, AccessTag("tag2"), AccessTag("tag3")]
+    field_float: Annotated[float, AccessTag("tag3"), AccessTag("tag4")]
+    field_bool: bool
+
+
+@pytest.fixture(autouse=True)
+def reset_model_views():
+    """setup any state specific to the execution of the given module."""
+    with contextlib.suppress(AttributeError):
+        del Model.model_views  # type: ignore
+    with contextlib.suppress(AttributeError):
+        del ModelComplexTypes.model_views  # type: ignore
+    with contextlib.suppress(AttributeError):
+        del ListRootModel.model_views  # type: ignore
+    with contextlib.suppress(AttributeError):
+        del SetRootModel.model_views  # type: ignore
+    with contextlib.suppress(AttributeError):
+        del TupleVarRootModel.model_views  # type: ignore
+    with contextlib.suppress(AttributeError):
+        del TupleFixedRootModel.model_views  # type: ignore
+    with contextlib.suppress(AttributeError):
+        del DictRootModel.model_views  # type: ignore
+    with contextlib.suppress(AttributeError):
+        del ModelCircular.model_views  # type: ignore
+    with contextlib.suppress(AttributeError):
+        del ModelTagged.model_views  # type: ignore
+    yield
+
+
+def _generate_params_recurrent(prefix: str = ""):
+    return list(
+        chain.from_iterable(
+            [
+                [
+                    pytest.param(
+                        prefix + "And".join(g[0] for g in gs),
+                        tuple(chain.from_iterable(g[1] for g in gs)),
+                        set(chain.from_iterable(g[2] for g in gs)),
+                        id="And".join(g[0] for g in gs),
+                    )
+                    for gs in combinations(_groups_recurrent, r + 1)
+                ]
+                for r in range(3)
+            ]
+        ),
+    )
+
+
+def _generate_params(prefix: str = ""):
+    return list(
+        chain.from_iterable(
+            [
+                [
+                    pytest.param(
+                        prefix + "And".join(g[0] for g in gs),
+                        tuple(chain.from_iterable(g[1] for g in gs)),
+                        set(chain.from_iterable(g[2] for g in gs)),
+                        id="And".join(g[0] for g in gs),
+                    )
+                    for gs in combinations(_groups, r + 1)
+                ]
+                for r in range(3)
+            ]
+        ),
+    )
+
+
+@pytest.mark.parametrize(("view_name", "access_modes", "expected_fields"), _generate_params("TestView"))
+def test_view(view_name: str, access_modes: tuple[AccessMode, ...], expected_fields: set[str]):
+    class TestView(View[Model], view_name=view_name, access_modes=access_modes):
+        """View docstring"""
+
+    builder = Builder(view_name, access_modes=access_modes)
+
+    view_cls = builder.build_view(Model)
+
+    assert TestView.__name__ == "TestView"
+    assert set(view_cls.model_fields.keys()) == expected_fields
+
+    assert TestView.__module__ == __name__
+    assert TestView.__doc__ == "View docstring"
+
+    assert hasattr(Model, "model_views")
+    assert Model.model_views[view_name] is TestView  # type: ignore
+
+    for f in expected_fields:
+        assert TestView.model_fields[f].default == Model.model_fields[f].default
+        assert TestView.model_fields[f].default_factory == Model.model_fields[f].default_factory
+        assert TestView.model_fields[f].alias == Model.model_fields[f].alias
+        assert TestView.model_fields[f].alias_priority == Model.model_fields[f].alias_priority
+        assert TestView.model_fields[f].annotation == Model.model_fields[f].annotation
+        assert TestView.model_fields[f].description == Model.model_fields[f].description
+        assert TestView.model_fields[f].title == Model.model_fields[f].title
+        assert TestView.model_fields[f].deprecated == Model.model_fields[f].deprecated
+        assert TestView.model_fields[f].discriminator == Model.model_fields[f].discriminator
+        assert TestView.model_fields[f].metadata == [
+            m for m in Model.model_fields[f].metadata if not isinstance(m, AccessMode)
+        ]
+
+
+@pytest.mark.parametrize(
+    ("view_name", "access_modes", "expected_fields"),
+    _generate_params_recurrent("TestView"),
+)
+def test_recurrent_view(view_name: str, access_modes: tuple[AccessMode, ...], expected_fields: set[str]):
+    class TestView(View[ModelCircular], view_name=view_name, access_modes=access_modes):
+        """View docstring"""
+
+    assert TestView.__name__ == "TestView"
+    assert set(TestView.model_fields.keys()) == expected_fields
+
+    assert TestView.__module__ == __name__
+    assert TestView.__doc__ == "View docstring"
+
+    assert hasattr(ModelCircular, "model_views")
+    assert ModelCircular.model_views[view_name] is TestView  # type: ignore
+
+    for f in expected_fields:
+        assert TestView.model_fields[f].default == ModelCircular.model_fields[f].default
+        assert TestView.model_fields[f].default_factory == ModelCircular.model_fields[f].default_factory
+        assert TestView.model_fields[f].alias == ModelCircular.model_fields[f].alias
+        assert TestView.model_fields[f].alias_priority == ModelCircular.model_fields[f].alias_priority
+
+        assert TestView.model_fields[f].annotation == ModelCircular.model_fields[f].annotation.model_views[view_name]  # type: ignore
+        assert TestView.model_fields[f].description == ModelCircular.model_fields[f].description
+        assert TestView.model_fields[f].title == ModelCircular.model_fields[f].title
+        assert TestView.model_fields[f].deprecated == ModelCircular.model_fields[f].deprecated
+        assert TestView.model_fields[f].discriminator == ModelCircular.model_fields[f].discriminator
+        assert TestView.model_fields[f].metadata == [
+            m for m in ModelCircular.model_fields[f].metadata if not isinstance(m, AccessMode)
+        ]
+
+
+@pytest.mark.parametrize(("view_name", "access_modes", "expected_fields"), _generate_params("TestView"))
+def test_cached_view(view_name: str, access_modes: tuple[AccessMode, ...], expected_fields: set[str]):
+    class TestView(View[Model], view_name=view_name, access_modes=access_modes):
+        """View docstring"""
+
+    builder = Builder(view_name, access_modes=access_modes)
+
+    assert id(TestView) == id(builder.build_from_model(Model))
+
+
+@pytest.mark.parametrize(
+    ("root_class",),
+    [
+        (ListRootModel,),
+        (SetRootModel,),
+        (TupleVarRootModel,),
+        (TupleFixedRootModel,),
+        (DictRootModel,),
+    ],
+)
+@pytest.mark.parametrize(("view_name", "access_modes", "expected_fields"), _generate_params("TestView"))
+def test_root_view(
+    root_class: type[RootModel[Any]],
+    view_name: str,
+    access_modes: tuple[AccessMode, ...],
+    expected_fields: set[str],
+):
+    class TestView(RootView[root_class], view_name=view_name, access_modes=access_modes):
+        """View docstring"""
+
+    assert TestView.__name__ == "TestView"
+    assert issubclass(TestView, RootView)
+
+    assert get_origin(TestView.model_fields["root"].annotation) == get_origin(
+        root_class.model_fields["root"].annotation
+    )
+
+    assert len(get_args(TestView.model_fields["root"].annotation)) == len(
+        get_args(root_class.model_fields["root"].annotation)
+    )
+
+    for idx, arg in enumerate(get_args(TestView.model_fields["root"].annotation)):
+        if arg is not Ellipsis and issubclass(arg, View):
+            assert arg == get_args(root_class.model_fields["root"].annotation)[idx].model_views[view_name]
+        else:
+            assert arg == get_args(root_class.model_fields["root"].annotation)[idx]
+
+
+@pytest.mark.parametrize(
+    ("view_name", "access_modes"),
+    [
+        ("ReadOnly", (AccessMode.READ_ONLY,)),
+    ],
+)
+def test_view_complex_types(view_name: str, access_modes: tuple[AccessMode, ...]):
+    class TestView(View[ModelComplexTypes], view_name=view_name, access_modes=access_modes):
+        """View docstring"""
+
+    assert TestView.__name__ == "TestView"
+
+    for f_name, f_info in TestView.model_fields.items():
+        expected_origin = get_origin(ModelComplexTypes.model_fields[f_name].annotation)
+        expected_args = get_args(ModelComplexTypes.model_fields[f_name].annotation)
+
+        origin = get_origin(f_info.annotation)
+        args = get_args(f_info.annotation)
+
+        assert origin == expected_origin
+
+        if issubclass(expected_origin, Mapping):  # type: ignore
+            assert args[0] == expected_args[0]
+
+            if issubclass(expected_args[1], BaseModel):
+                assert args[1] == expected_args[1].model_views[view_name]  # type: ignore
+            else:
+                assert args[1] == expected_args[1]
+        else:
+            if issubclass(expected_args[0], BaseModel):
+                assert args[0] == expected_args[0].model_views[view_name]  # type: ignore
+            else:
+                assert args[0] == expected_args[0]
+
+
+@pytest.mark.parametrize(
+    ("view_name", "access_modes"),
+    [
+        ("ReadOnly", (AccessMode.READ_ONLY,)),
+    ],
+)
+def test_view_complex_types_with_extra_fields(view_name: str, access_modes: tuple[AccessMode, ...]):
+    class TestView(View[ModelComplexTypes], view_name=view_name, access_modes=access_modes):
+        """View docstring"""
+
+        new_field: int = 42
+
+    assert TestView.__name__ == "TestView"
+
+    assert "new_field" in TestView.model_fields
+
+    for f_name, f_info in TestView.model_fields.items():
+        if f_name == "new_field":
+            assert f_info.annotation is int
+            assert f_info.default == 42
+            continue
+        expected_origin = get_origin(ModelComplexTypes.model_fields[f_name].annotation)
+        expected_args = get_args(ModelComplexTypes.model_fields[f_name].annotation)
+
+        origin = get_origin(f_info.annotation)
+        args = get_args(f_info.annotation)
+
+        assert origin == expected_origin
+
+        if issubclass(expected_origin, Mapping):  # type: ignore
+            assert args[0] == expected_args[0]
+
+            if issubclass(expected_args[1], BaseModel):
+                assert args[1] == expected_args[1].model_views[view_name]  # type: ignore
+            else:
+                assert args[1] == expected_args[1]
+        else:
+            if issubclass(expected_args[0], BaseModel):
+                assert args[0] == expected_args[0].model_views[view_name]  # type: ignore
+            else:
+                assert args[0] == expected_args[0]
+
+
+def test_no_view_name_error():
+    with pytest.raises(TypeError):
+
+        class TestView(View[Model]):
+            """View docstring"""
+
+
+@pytest.mark.parametrize(
+    ("view_name", "access_modes", "include_tags", "exclude_tags", "expected_fields"),
+    [
+        (
+            "ReadOnly",
+            (AccessMode.READ_ONLY,),
+            None,
+            None,
+            (
+                "field_int",
+                "field_bool",
+                "field_float",
+            ),
+        ),
+        (
+            "ReadOnlyTag3",
+            (AccessMode.READ_ONLY,),
+            (AccessTag("tag3"),),
+            None,
+            ("field_int", "field_bool", "field_float", "field_str"),
+        ),
+        (
+            "ReadOnlyTag3",
+            (AccessMode.READ_ONLY, AccessMode.WRITE_ONLY),
+            None,
+            (AccessTag("tag3"),),
+            ("field_int", "field_bool"),
+        ),
+    ],
+)
+def test_view_with_tags(
+    view_name: str,
+    access_modes: tuple[AccessMode, ...],
+    include_tags: set[str] | None,
+    exclude_tags: set[str] | None,
+    expected_fields: set[str] | None,
+):
+    class TestView(
+        View[ModelTagged],
+        view_name=view_name,
+        access_modes=access_modes,
+        include_tags=include_tags,
+        exclude_tags=exclude_tags,
+    ):
+        """View docstring"""
+
+    assert set(TestView.model_fields.keys()) == set(expected_fields) if expected_fields else set()

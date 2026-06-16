@@ -9,7 +9,7 @@ license = "MIT"
 readme = "README.rst"
 requires-python = ">=3.13,<4.0.0"
 dependencies = ["pydantic (>=2.10.6,<3.0.0)"]
-keywords = ["view", "pydantic", "datamodel", "model", "REST API"]
+keywords = ["view", "pydantic", "datamodel", "dataclass", "model", "REST API", "mypy"]
 
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -17,6 +17,7 @@ classifiers = [
     "Framework :: Pydantic :: 2",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Typing :: Typed"
 ]
 
@@ -27,11 +28,11 @@ Documentation = "https://pydantic-views.readthedocs.io/stable/"
 Issues = "https://github.com/alfred82santa/pydantic-views/issues"
 
 [build-system]
-requires = ["uv_build>=0.9.26,<0.10.0"]
+requires = ["uv_build>=0.9.26,<0.12.0"]
 build-backend = "uv_build"
 
 [tool.ruff]
-exclude = [".venv/*"]
+exclude = [".venv/*", "examples/stubs/*"]
 line-length = 120
 
 [tool.ruff.lint]
