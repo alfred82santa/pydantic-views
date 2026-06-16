@@ -519,8 +519,8 @@ stub generator. It imports your module and writes a ``.pyi`` describing every vi
 
    python -m pydantic_views.stubgen myapp.models
 
-Pass a package name to stub every submodule, and ``-o/--output-dir`` to write the stubs to a separate
-tree. See
+Pass a package name to stub every submodule, list several modules at once, and use ``-o/--output-dir``
+to write the stubs to a separate tree. See
 `Type checking and stub files <https://pydantic-views.readthedocs.io/stable/type_checking.html>`_
 for the stub generator and mypy plugin options, and the full list of what is and isn't analysed
 statically.

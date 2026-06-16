@@ -18,15 +18,16 @@ The emitted stub for each module contains:
 Usage::
 
     python -m pydantic_views.stubgen examples.models
-    python -m pydantic_views.stubgen examples.models --output-dir build/stubs
+    python -m pydantic_views.stubgen examples.models examples.other --output-dir build/stubs
 
-By default each ``.pyi`` is written next to its source ``.py``. With ``--output-dir`` the package
-tree is mirrored under the given directory.
+One or more module names may be given. By default each ``.pyi`` is written next to its source ``.py``.
+With ``--output-dir`` the package tree is mirrored under the given directory.
 """
 
 from __future__ import annotations
 
 import argparse
+import ast
 import collections.abc
 import enum
 import importlib
@@ -395,36 +396,115 @@ def _collect_runtime_views(module: types.ModuleType) -> list[type[View[Any]]]:
     return list(views.values())
 
 
+def _target_names(target: ast.expr) -> list[str]:
+    """Return the simple names bound by an assignment target (handling tuple/list unpacking)."""
+    if isinstance(target, ast.Name):
+        return [target.id]
+    if isinstance(target, ast.Starred):
+        return _target_names(target.value)
+    if isinstance(target, (ast.Tuple, ast.List)):
+        return [name for elt in target.elts for name in _target_names(elt)]
+    return []
+
+
+def _module_assigned_names(module: types.ModuleType) -> list[str]:
+    """Return the module-level variable names assigned in the source, in definition order.
+
+    Reading the source (rather than ``vars(module)``) is what lets us tell a variable *defined* in
+    the module apart from a name merely *imported* into it: imports are not assignment statements.
+    Class and function definitions are separate node kinds and are emitted elsewhere.
+    """
+    source_path = getattr(module, "__file__", None)
+    if source_path is None:
+        return []
+    try:
+        tree = ast.parse(Path(source_path).read_text())
+    except (OSError, SyntaxError):
+        return []
+
+    names: list[str] = []
+    seen: set[str] = set()
+    for node in tree.body:
+        if isinstance(node, ast.AnnAssign):
+            targets = _target_names(node.target)
+        elif isinstance(node, ast.Assign):
+            targets = [name for target in node.targets for name in _target_names(target)]
+        else:
+            continue
+        for name in targets:
+            if name not in seen and not (name.startswith("__") and name.endswith("__")):
+                seen.add(name)
+                names.append(name)
+    return names
+
+
+def _render_module_variables(module: types.ModuleType, imports: Imports, skip: set[str]) -> list[str]:
+    """Render ``name: type`` lines for module-level variables defined in ``module``.
+
+    Annotated variables use their declared annotation; the rest fall back to the runtime value's type.
+    """
+    try:
+        hints = typing.get_type_hints(module)
+    except Exception:
+        hints = {}
+    raw_annotations = getattr(module, "__annotations__", {})
+
+    lines: list[str] = []
+    for name in _module_assigned_names(module):
+        if name in skip:
+            continue
+        if name in hints:
+            type_str = render_annotation(hints[name], imports)
+        elif name in raw_annotations:
+            type_str = render_annotation(raw_annotations[name], imports)
+        elif name in vars(module):
+            type_str = imports.ref(type(vars(module)[name]))
+        else:
+            continue
+        lines.append(f"{name}: {type_str}")
+    return lines
+
+
 def render_module(module: types.ModuleType) -> str:
     """Render the full ``.pyi`` text for a single module."""
     imports = Imports(module.__name__)
     emitted: set[int] = set()
+    emitted_names: set[str] = set()
     blocks: list[str] = []
     functions: list[str] = []
 
     # 1. Members declared in the module, in definition order. Pydantic registers parametrized
     # generics (e.g. ``View[Any]``) as module attributes whose ``__name__`` is not a valid
     # identifier; those are implementation details and must be skipped.
-    for obj in vars(module).values():
+    for name, obj in vars(module).items():
         if isinstance(obj, type) and obj.__module__ == module.__name__ and obj.__name__.isidentifier():
             blocks.append(_render_class(obj, imports))
             emitted.add(id(obj))
-        elif inspect.isfunction(obj) and obj.__module__ == module.__name__:
-            functions.append(_render_def(obj.__name__, obj, imports))
+            emitted_names.add(obj.__name__)
+        # Use the attribute name, not ``obj.__name__``: a module-level lambda is bound to a real
+        # name but reports ``__name__`` as ``"<lambda>"``.
+        elif inspect.isfunction(obj) and obj.__module__ == module.__name__ and name.isidentifier():
+            functions.append(_render_def(name, obj, imports))
+            emitted_names.add(name)
 
     # 2. Views generated at runtime that are not module attributes, sorted for stable output.
     runtime_views = [v for v in _collect_runtime_views(module) if id(v) not in emitted]
     for view_cls in sorted(runtime_views, key=lambda v: v.__name__):
         blocks.append(_render_model(view_cls, imports))
         emitted.add(id(view_cls))
+        emitted_names.add(view_cls.__name__)
+
+    # 3. Module-level variables and constants defined in the module.
+    variables = _render_module_variables(module, imports, emitted_names)
 
     header = (
         "# Stub generated by pydantic_views.stubgen. Includes regular types, Pydantic models,\n"
         "# declared views, and views generated at runtime by the builders.\n"
     )
     import_block = imports.render_block()
+    variable_block = "\n".join(variables)
     body = "\n\n\n".join([*blocks, *functions])
-    sections = [header, import_block, body]
+    sections = [header, import_block, variable_block, body]
     return "\n\n".join(section for section in sections if section).rstrip() + "\n"
 
 
@@ -466,7 +546,12 @@ def main(argv: list[str] | None = None) -> int:
         prog="python -m pydantic_views.stubgen",
         description="Generate .pyi stubs (including runtime-generated views) for a module and its children.",
     )
-    parser.add_argument("module", help="Importable module name, e.g. examples.models")
+    parser.add_argument(
+        "modules",
+        nargs="+",
+        metavar="module",
+        help="One or more importable module names, e.g. examples.models examples.other",
+    )
     parser.add_argument(
         "-o",
         "--output-dir",
@@ -479,9 +564,9 @@ def main(argv: list[str] | None = None) -> int:
     if "" not in sys.path and "." not in sys.path:
         sys.path.insert(0, "")
 
-    written = generate(args.module, args.output_dir)
-    for path in written:
-        print(f"wrote {path}")
+    for module_name in args.modules:
+        for path in generate(module_name, args.output_dir):
+            print(f"wrote {path}")
     return 0
 
 

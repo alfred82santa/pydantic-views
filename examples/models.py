@@ -26,10 +26,14 @@ from pydantic import BaseModel, Field, computed_field
 
 from pydantic_views import (
     AccessMode,
+    AccessTag,
+    CreatePreset,
     Hidden,
     LoadPreset,
+    Preset,
     ReadOnly,
     ReadOnlyOnCreation,
+    UpdatePreset,
     View,
     WriteOnly,
     WriteOnlyOnCreation,
@@ -224,3 +228,28 @@ class AccountLoad(View[Account], preset=LoadPreset):
     keeps exactly the readable fields (``id``, ``username``) and drops write-only ``password`` —
     identical to the explicit-keyword views above.
     """
+
+
+InternalCreatePreset = Preset(
+    view_name="InternalCreate",
+    access_modes=CreatePreset.access_modes,
+    include_tags=(AccessTag("internal-updatable"),),
+    all_optional=CreatePreset.all_optional,
+    all_nullable=CreatePreset.all_nullable,
+    hide_default_null=CreatePreset.hide_default_null,
+    include_computed_fields=CreatePreset.include_computed_fields,
+)
+
+InternalUpdatePreset = Preset(
+    view_name="InternalUpdate",
+    access_modes=UpdatePreset.access_modes,
+    include_tags=(AccessTag("internal-updatable"),),
+    all_optional=UpdatePreset.all_optional,
+    all_nullable=UpdatePreset.all_nullable,
+    hide_default_null=UpdatePreset.hide_default_null,
+    include_computed_fields=UpdatePreset.include_computed_fields,
+)
+
+
+var_int: int = 42
+var_str: str = "hello"

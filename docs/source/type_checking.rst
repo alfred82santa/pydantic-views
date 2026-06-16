@@ -105,12 +105,13 @@ describing their real fields. Run it as a module, passing the importable name of
    wrote /path/to/myapp/models.pyi
 
 By default the stub is written next to its source file (``models.py`` -> ``models.pyi``). Pass a
-**package** name to walk every submodule, and use ``-o`` / ``--output-dir`` to mirror the package
-tree into a separate directory instead of writing the stubs in place:
+**package** name to walk every submodule, list **several modules** at once, and use ``-o`` /
+``--output-dir`` to mirror the package tree into a separate directory instead of writing the stubs in
+place:
 
 .. code-block:: console
 
-   $ python -m pydantic_views.stubgen myapp --output-dir build/stubs
+   $ python -m pydantic_views.stubgen myapp.models myapp.schemas --output-dir build/stubs
 
 Wire either command into a pre-commit hook or a ``make`` target to keep the stubs in sync with your
 models.

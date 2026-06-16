@@ -22,14 +22,17 @@ from pydantic_views.stubgen import (
     _collect_runtime_views,
     _inject_nested,
     _is_concrete_view,
+    _module_assigned_names,
     _output_path,
     _render_bases,
     _render_enum,
     _render_init,
+    _render_module_variables,
     _render_plain_class,
     _render_signature,
     _render_special_form,
     _render_type_params,
+    _target_names,
     generate,
     iter_module_tree,
     main,
@@ -131,6 +134,13 @@ def with_default(a, b=1): ...
 def future_unresolved(
     x: _UndefinedRuntimeName,  # noqa: F821 # type: ignore
 ) -> None: ...  # noqa: F821  -- string annotation only
+
+
+# Module-level variables exercised by the variable renderer.
+MODULE_CONSTANT: int = 7  # annotated -> uses the annotation
+inferred_constant = Color.RED  # unannotated -> type inferred from the runtime value
+unpacked_a, unpacked_b = 1, 2  # tuple-unpacked assignment
+module_lambda = lambda x: x  # noqa: E731  -- emitted as a function, not a variable
 
 
 @pytest.fixture
@@ -440,6 +450,97 @@ def test_write_only_field_dropped_from_load_view(stub: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Module-level variables
+# ---------------------------------------------------------------------------
+def _module_var_annotations(stub: str) -> dict[str, str]:
+    tree = _parse(stub)
+    return {
+        node.target.id: ast.unparse(node.annotation)
+        for node in tree.body
+        if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name)
+    }
+
+
+def test_target_names_handles_unpacking() -> None:
+    assign = typing.cast(ast.Assign, ast.parse("a, (b, *c) = x").body[0])
+    assert _target_names(assign.targets[0]) == ["a", "b", "c"]
+
+
+def test_target_names_ignores_non_name_targets() -> None:
+    assign = typing.cast(ast.Assign, ast.parse("obj.attr = 1").body[0])
+    assert _target_names(assign.targets[0]) == []
+
+
+def test_module_assigned_names_unreadable_source() -> None:
+    module = types.ModuleType("bad_source_mod")
+    module.__file__ = "/nonexistent/path/does_not_exist.py"
+    assert _module_assigned_names(module) == []
+
+
+def test_render_module_variables_handles_unresolvable_hints_and_missing_values(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import importlib
+    import sys
+
+    source = (
+        "from __future__ import annotations\n"
+        "X: int = 1\n"
+        "Y: UnresolvableName = 2  # forces get_type_hints to fail\n"
+        "TEMP = 1\n"
+        "del TEMP  # assigned in source but absent at runtime\n"
+    )
+    (tmp_path / "tmp_vars_mod.py").write_text(source)
+    monkeypatch.syspath_prepend(str(tmp_path))
+    module = importlib.import_module("tmp_vars_mod")
+    try:
+        lines = _render_module_variables(module, Imports("tmp_vars_mod"), skip=set())
+    finally:
+        sys.modules.pop("tmp_vars_mod", None)
+
+    assert "X: int" in lines  # resolved from the raw string annotation
+    assert "Y: UnresolvableName" in lines
+    assert not any(line.startswith("TEMP") for line in lines)  # value gone -> skipped
+
+
+def test_module_assigned_names_excludes_imports_and_definitions() -> None:
+    import tests.test_stubgen as module
+
+    names = _module_assigned_names(module)
+    assert {"MODULE_CONSTANT", "inferred_constant", "unpacked_a", "unpacked_b"} <= set(names)
+    # imported names and class/function definitions are not assignments
+    assert "BaseModel" not in names
+    assert "Author" not in names
+    assert "returns_int" not in names
+
+
+def test_module_assigned_names_without_source() -> None:
+    assert _module_assigned_names(types.ModuleType("no_source_mod")) == []
+
+
+def test_stub_renders_module_variables(stub: str) -> None:
+    annotations = _module_var_annotations(stub)
+    assert annotations["MODULE_CONSTANT"] == "int"  # from the declared annotation
+    assert annotations["inferred_constant"] == "Color"  # inferred from the runtime value
+    assert annotations["unpacked_a"] == "int"
+    assert annotations["unpacked_b"] == "int"
+
+
+def test_module_variables_skip_emitted_names(imports: Imports) -> None:
+    import tests.test_stubgen as module
+
+    # ``module_lambda`` is emitted as a function, so it must not also appear as a variable.
+    rendered = _render_module_variables(module, imports, skip={"module_lambda"})
+    assert not any(line.startswith("module_lambda:") for line in rendered)
+
+
+def test_stub_does_not_duplicate_lambda(stub: str) -> None:
+    # rendered once as a function definition, never as a module variable
+    assert "def module_lambda" in stub
+    assert "module_lambda:" not in stub
+
+
+# ---------------------------------------------------------------------------
 # iter_module_tree / _output_path
 # ---------------------------------------------------------------------------
 def test_iter_module_tree_single_module() -> None:
@@ -512,6 +613,14 @@ def test_main_when_cwd_already_on_path(
     monkeypatch.syspath_prepend("")  # exercise the branch where the cwd entry is already present
     assert main(["examples.models", "--output-dir", str(tmp_path)]) == 0
     capsys.readouterr()
+
+
+def test_main_accepts_multiple_modules(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    code = main(["examples.models", "tests.test_stubgen", "--output-dir", str(tmp_path)])
+    assert code == 0
+    assert "wrote" in capsys.readouterr().out
+    assert (tmp_path / "examples" / "models.pyi").exists()
+    assert (tmp_path / "tests" / "test_stubgen.pyi").exists()
 
 
 def test_render_annotation_handles_common_constructs() -> None:
