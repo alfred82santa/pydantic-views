@@ -6,8 +6,9 @@ from typing import Any, Literal, get_args, get_origin  # type: ignore
 
 import pytest
 from pydantic import BaseModel, Field, RootModel, computed_field
-from pydantic_core import PydanticUndefined
+from pydantic_core import MISSING, PydanticUndefined
 
+from pydantic_views import RootView
 from pydantic_views.annotations import (
     AccessMode,
     Hidden,
@@ -23,7 +24,6 @@ from pydantic_views.builder import (
     BuilderCreateResult,
     BuilderLoad,
     BuilderUpdate,
-    RootView,
     ensure_model_views,
 )
 from pydantic_views.view import View
@@ -404,7 +404,7 @@ def test_view_all_optional(view_name: str, access_modes: tuple[AccessMode, ...],
 
     for f in expected_fields:
         assert view_cls.model_fields[f].default == PydanticUndefined
-        assert view_cls.model_fields[f].default_factory() == PydanticUndefined  # type: ignore
+        assert view_cls.model_fields[f].default_factory() is MISSING  # type: ignore
 
 
 @pytest.mark.parametrize(
@@ -421,7 +421,7 @@ def test_view_hide_default_null(view_name: str, access_modes: tuple[AccessMode, 
             continue
         assert view_cls.model_fields[f].default == PydanticUndefined
         assert view_cls.model_fields[f].default_factory is not None
-        assert view_cls.model_fields[f].default_factory() is PydanticUndefined  # type: ignore
+        assert view_cls.model_fields[f].default_factory() is None  # type: ignore
 
 
 @pytest.mark.parametrize(

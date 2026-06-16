@@ -8,10 +8,31 @@ on:
 
 permissions:
   contents: write
+  id-token: write
 
 jobs:
   make-release:
-    uses: ./.github/workflows/common_make_release.yaml
-    secrets: inherit
-    with:
-      level: ${{ (startsWith(github.ref_name, 'release/')) && 'rc' || (contains(fromJson('["master", "main"]'), github.ref_name) && 'beta') || 'alpha' }}
+    name: Make release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    environment:
+        name: pypi-dev
+        url: https://pypi.org/project/pydantic-views/
+    outputs:
+      version: ${{ steps.make_release.outputs.version }}
+      base-release-version: ${{ steps.make_release.outputs.base-release-version }}
+      release-ref: ${{ steps.make_release.outputs.release-ref }}
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+      - uses: ./.github/actions/publishing
+        id: make_release
+        with:
+          level: ${{ (startsWith(github.ref_name, 'release/')) && 'rc' || (contains(fromJson('["master", "main"]'), github.ref_name) && 'beta') || 'alpha' }}
+          
+      - name: Publish package distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1

@@ -1,25 +1,25 @@
 from collections.abc import Iterable, Mapping
-from copy import deepcopy
 from functools import reduce
+from tkinter import NONE
 from types import NoneType, UnionType
 from typing import (
     Annotated,
     Any,
     ForwardRef,
     Literal,
+    NamedTuple,
     cast,
     get_args,
     get_origin,
 )
-from weakref import ref
 
 from pydantic import BaseModel, RootModel, create_model
 from pydantic.fields import ComputedFieldInfo, FieldInfo
-from pydantic_core import PydanticUndefined
+from pydantic_core import MISSING, PydanticUndefined
 
-from .annotations import AccessMode
+from .annotations import AccessMode, AccessTag
 from .manager import Manager
-from .view import RootView, View
+from .view import View
 
 
 class Builder:
@@ -28,7 +28,9 @@ class Builder:
     def __init__(
         self,
         view_name: str,
-        access_modes: tuple[AccessMode, ...],
+        access_modes: Iterable[AccessMode] | None = None,
+        include_tags: Iterable[AccessTag] | None = None,
+        exclude_tags: Iterable[AccessTag] | None = None,
         all_optional: bool = False,
         all_nullable: bool = False,
         hide_default_null: bool = False,
@@ -37,13 +39,19 @@ class Builder:
         """
         :param view_name: Name suffix for the generated view class.
         :param access_modes: Access modes that the builder will include in generated views.
+        :param include_tags: Tags that the builder will include in generated views
+                             even if they don't match the access modes.
+        :param exclude_tags: Tags that the builder will exclude from generated views
+                             even if they match the access modes.
         :param all_optional: Make all fields optional (useful for update scenarios).
         :param all_nullable: Make all fields nullable when allowed.
         :param hide_default_null: Replace default ``None`` with ``PydanticUndefined`` to hide ``null`` in schemas.
         :param include_computed_fields: Whether computed fields should be included in generated views.
         """
         self.view_name = view_name
-        self.access_modes = access_modes
+        self.access_modes = set(access_modes) if access_modes is not None else set()
+        self.include_tags = set(include_tags) if include_tags is not None else set()
+        self.exclude_tags = set(exclude_tags) if exclude_tags is not None else set()
         self.all_optional = all_optional
         self.all_nullable = all_nullable
         self.hide_default_null = hide_default_null
@@ -96,7 +104,12 @@ class Builder:
 
     def _filter_field(self, f_info: FieldInfo):
         am = {m for m in f_info.metadata if isinstance(m, AccessMode)}
-        return len(am & set(self.access_modes)) == 0 and len(am) > 0
+        tags = {t for t in f_info.metadata if isinstance(t, AccessTag)}
+
+        if (self.access_modes is not None and len(am & set(self.access_modes)) > 0) or len(am) == 0:
+            return self.exclude_tags is not None and len(tags & set(self.exclude_tags)) > 0
+
+        return not (self.include_tags is not None and len(tags & set(self.include_tags)) > 0)
 
     def _iter_fields[T: BaseModel](self, model: type[T]):
         for f_name, f_info in model.model_fields.items():
@@ -113,6 +126,29 @@ class Builder:
                 continue
             yield f_name, cf_info
 
+    def define_fields_from_model[T: BaseModel](self, model: type[T]) -> dict[str, tuple[type[Any] | None, FieldInfo]]:
+        """
+        Define fields for the view based on the provided model.
+
+        :param model: Model class to derive the view from.
+        :returns: Dictionary of field names and their corresponding types and FieldInfo.
+        """
+        model_fields: dict[str, tuple[type[Any] | None, FieldInfo]] = {}
+        for f_name, f_info in self._iter_fields(model):
+            model_fields[f_name] = self._map_field_info(
+                f_info,
+                ignore_nullable=issubclass(model, RootModel),
+            )
+
+        if self.include_computed_fields:
+            for f_name, cf_info in self._iter_computed_fields(model):
+                model_fields[f_name] = self._map_computed_field_info(cf_info)
+
+        return model_fields
+
+    def set_forward_ref(self, model: type[BaseModel], name: str, module: str):
+        self._views[model] = ForwardRef(name, module=module)
+
     def build_from_model[T: BaseModel](self, model: type[T]) -> type[View[T] | T]:
         """
         Build the concrete view class from the provided model.
@@ -120,15 +156,13 @@ class Builder:
         :param model: Model class to derive the view from.
         :returns: Generated view class for the model.
         """
-        from pydantic._internal._config import ConfigWrapper  # type: ignore
-
         view_name = model.__name__ + self.view_name[0].upper() + self.view_name[1:]
         try:
             view_cache = self._views[model]
             if not isinstance(view_cache, ForwardRef):
                 return cast(type[View[T] | T], view_cache)
         except KeyError:
-            self._views[model] = ForwardRef(view_name, module=model.__module__)
+            self.set_forward_ref(model, view_name, model.__module__)
 
         view: type[View[T] | T]
 
@@ -138,48 +172,15 @@ class Builder:
             view = manager[self.view_name]
             self._views[model] = cast(type[View[BaseModel]], view)
         except KeyError:
-            model_fields: dict[str, tuple[type[Any] | None, FieldInfo]] = {}
-            for f_name, f_info in self._iter_fields(model):
-                model_fields[f_name] = self._map_field_info(
-                    f_info,
-                    ignore_nullable=issubclass(model, RootModel),
-                )
+            from .view import RootView
 
-            if self.include_computed_fields:
-                for f_name, cf_info in self._iter_computed_fields(model):
-                    model_fields[f_name] = self._map_computed_field_info(cf_info)
-
-            base_view: type[View[T]] | type[RootView[T]]
-
-            if issubclass(model, RootModel):
-
-                class _RootView(RootView[T]):
-                    model_config = deepcopy(model.model_config)
-
-                    __model_class_root__ = ref(cast(type[T], model))  # pyright: ignore[reportAssignmentType]
-
-                base_view = _RootView
-
-            else:
-
-                class _View(View[T]):
-                    model_config = deepcopy(model.model_config)
-
-                    __model_class_root__ = ref(cast(type[T], model))  # pyright: ignore[reportAssignmentType]
-
-                _View.model_config["protected_namespaces"] = tuple(
-                    {
-                        *ConfigWrapper(model.model_config).protected_namespaces,
-                        *ConfigWrapper(View.model_config).protected_namespaces,
-                    }
-                )
-
-                base_view = _View
+            model_fields = self.define_fields_from_model(model)
 
             params: dict[str, Any] = {
                 "__module__": model.__module__,
-                "__base__": base_view,
+                "__base__": (RootView[model] if issubclass(model, RootModel) else View[model]),
                 "__doc__": (f"View `{self.view_name}` of model :class:`~{model.__module__}.{model.__qualname__}`"),
+                "__cls_kwargs__": {"view_name": self.view_name, "no_process": True},
                 **model_fields,
             }
 
@@ -210,14 +211,14 @@ class Builder:
         if self.all_optional:
             f_info = FieldInfo.merge_field_infos(
                 f_info,
-                default_factory=lambda: PydanticUndefined,
+                default_factory=lambda: MISSING,
             )
             f_info.default = PydanticUndefined
 
         if self.hide_default_null and f_info.default is None:
             f_info = FieldInfo.merge_field_infos(
                 f_info,
-                default_factory=lambda: PydanticUndefined,
+                default_factory=lambda: None,
             )
             f_info.default = PydanticUndefined
 
@@ -225,7 +226,7 @@ class Builder:
 
     def _map_annotation(
         self, annotation: type[Any] | None, *, ignore_nullable: bool = False
-    ) -> type[Any] | ForwardRef | NoneType | UnionType:
+    ) -> type[Any] | ForwardRef | NONE | UnionType:
         def finish_annotation(a: type[Any] | None) -> type[Any] | None | UnionType:
             if not ignore_nullable and self.all_nullable and a is not Ellipsis:  # type: ignore
                 return a | None  # type: ignore
@@ -294,6 +295,30 @@ class Builder:
         )
 
 
+class Preset(NamedTuple):
+    """Preset for a builder with predefined configuration."""
+
+    view_name: str
+    access_modes: tuple[AccessMode, ...] | None = None
+    include_tags: tuple[AccessTag, ...] | None = None
+    exclude_tags: tuple[AccessTag, ...] | None = None
+    all_optional: bool = False
+    all_nullable: bool = False
+    hide_default_null: bool = False
+    include_computed_fields: bool = False
+
+
+CreatePreset = Preset(
+    view_name="Create",
+    access_modes=(
+        AccessMode.READ_AND_WRITE,
+        AccessMode.WRITE_ONLY,
+        AccessMode.WRITE_ONLY_ON_CREATION,
+    ),
+    hide_default_null=True,
+)
+
+
 def BuilderCreate(view_name: str = "Create") -> Builder:
     """
     Default builder for ``Create`` views.
@@ -306,15 +331,18 @@ def BuilderCreate(view_name: str = "Create") -> Builder:
     :param view_name: View name.
     :returns: Builder configured for ``Create`` views.
     """
-    return Builder(
-        view_name,
-        access_modes=(
-            AccessMode.READ_AND_WRITE,
-            AccessMode.WRITE_ONLY,
-            AccessMode.WRITE_ONLY_ON_CREATION,
-        ),
-        hide_default_null=True,
-    )
+    return Builder(**CreatePreset._asdict())
+
+
+CreateResultPreset = Preset(
+    view_name="CreateResult",
+    access_modes=(
+        AccessMode.READ_AND_WRITE,
+        AccessMode.READ_ONLY,
+        AccessMode.READ_ONLY_ON_CREATION,
+    ),
+    include_computed_fields=True,
+)
 
 
 def BuilderCreateResult(view_name: str = "CreateResult") -> Builder:
@@ -329,15 +357,17 @@ def BuilderCreateResult(view_name: str = "CreateResult") -> Builder:
     :param view_name: View name.
     :returns: Builder configured for ``CreateResult`` views.
     """
-    return Builder(
-        view_name,
-        access_modes=(
-            AccessMode.READ_AND_WRITE,
-            AccessMode.READ_ONLY,
-            AccessMode.READ_ONLY_ON_CREATION,
-        ),
-        include_computed_fields=True,
-    )
+    return Builder(**CreateResultPreset._asdict())
+
+
+UpdatePreset = Preset(
+    view_name="Update",
+    access_modes=(
+        AccessMode.READ_AND_WRITE,
+        AccessMode.WRITE_ONLY,
+    ),
+    all_optional=True,
+)
 
 
 def BuilderUpdate(view_name: str = "Update") -> Builder:
@@ -351,11 +381,17 @@ def BuilderUpdate(view_name: str = "Update") -> Builder:
     :param view_name: View name.
     :returns: Builder configured for ``Update`` views.
     """
-    return Builder(
-        view_name,
-        access_modes=(AccessMode.READ_AND_WRITE, AccessMode.WRITE_ONLY),
-        all_optional=True,
-    )
+    return Builder(**UpdatePreset._asdict())
+
+
+LoadPreset = Preset(
+    view_name="Load",
+    access_modes=(
+        AccessMode.READ_AND_WRITE,
+        AccessMode.READ_ONLY,
+    ),
+    include_computed_fields=True,
+)
 
 
 def BuilderLoad(view_name: str = "Load") -> Builder:
@@ -369,14 +405,7 @@ def BuilderLoad(view_name: str = "Load") -> Builder:
     :param view_name: View name.
     :returns: Builder configured for ``Load`` views.
     """
-    return Builder(
-        view_name,
-        access_modes=(
-            AccessMode.READ_AND_WRITE,
-            AccessMode.READ_ONLY,
-        ),
-        include_computed_fields=True,
-    )
+    return Builder(**LoadPreset._asdict())
 
 
 def ensure_model_views[T: BaseModel](model: type[T]):

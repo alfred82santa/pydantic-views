@@ -43,6 +43,10 @@ ensure_model_views(model=ModelAlias)["Replica"] = ModelAlias
     ],
 )
 def test_update_model[T: Model](model_cls: type[T], alias_gen: Callable[[str], str]):
+    import inspect
+
+    print(inspect.isclass(ModelAliasUpdate))
+
     orig = model_cls.model_validate(
         {
             alias_gen("field_int"): 3,

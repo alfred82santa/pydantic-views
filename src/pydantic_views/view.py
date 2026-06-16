@@ -4,8 +4,10 @@ from weakref import ReferenceType
 
 from pydantic import BaseModel, RootModel
 
+from .metaclass import ViewMetaClass
 
-class View[T: BaseModel](BaseModel):
+
+class View[T: BaseModel](BaseModel, metaclass=ViewMetaClass):
     """Lightweight view over a base Pydantic model with helper builders and mergers."""
 
     __model_class_root__: ClassVar[ReferenceType[type[BaseModel]]]
@@ -66,8 +68,10 @@ class View[T: BaseModel](BaseModel):
         return model_apply(model, self)
 
 
-class RootView[R](View[RootModel[R]], RootModel[R]):
+class RootView[R](RootModel[R], View[RootModel[R]]):  # type: ignore
     """View wrapper specialized for ``RootModel`` instances."""
+
+    pass
 
 
 def model_apply[T: BaseModel](orig: T, view: View[T] | T) -> T:

@@ -7,3 +7,4 @@
 
    api
    examples
+   type_checking

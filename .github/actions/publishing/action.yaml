@@ -1,0 +1,50 @@
+name: versioning
+description: Setup up current version
+inputs:
+  level:
+    description: "Version increase level"
+    required: false
+    default: "none"
+outputs:
+  version:
+    description: "New version"
+    value: ${{ steps.define-version.outputs.version }}
+  base-release-version:
+    description: "Base release version"
+    value: ${{ steps.define-version.outputs.release-patch}}
+  release-ref:
+    description: "Release reference"
+    value: release/${{ steps.define-version.outputs.release-minor }}
+
+runs:
+  using: composite
+
+  steps:
+    - uses: ./.github/actions/setup-repo
+
+    - uses: ./.github/actions/versioning
+      id: define-version
+      with:
+        level: ${{ inputs.level }}
+
+    - name: Build package
+      shell: bash
+      run: |
+        uv build
+
+    - name: Make release
+      id: make_release
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        TAG_NAME: v${{ steps.define-version.outputs.version-no-build }}
+        RELEASE_TITLE: Release ${{ steps.define-version.outputs.version }}
+      run: |
+        gh release create $TAG_NAME \
+          --target ${{ github.sha }} \
+          --title "$RELEASE_TITLE" \
+          ${{ (inputs.level != 'none') && '--prerelease' || '' }} \
+          --generate-notes \
+          dist/*
+        echo "release=$TAG_NAME" >> "$GITHUB_OUTPUT"
+        echo "**Tag:** [$TAG_NAME]("$(gh release view $TAG_NAME --json url --jq ".url")")" >> $GITHUB_STEP_SUMMARY
