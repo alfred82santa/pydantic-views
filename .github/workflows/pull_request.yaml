@@ -56,11 +56,6 @@ jobs:
           unique-id-for-comment: ${{ matrix.python-version }}
           title: Coverage for Python ${{ matrix.python-version }}
 
-      - name: Analyze with SonarCloud
-        uses: SonarSource/sonarqube-scan-action@v7.1.0
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}   # Generate a token on Sonarcloud.io, add it to the secrets of this repo with the name SONAR_TOKEN (Settings > Secrets > Actions > add new repository secret)
-
   success-pr:
     name: Success Pull Request
     if: ${{ always() }}
