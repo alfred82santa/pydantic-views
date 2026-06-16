@@ -84,6 +84,9 @@ A few things cannot be recovered statically:
 * A view must be declared in the **same module** as its source model, because mypy frees the
   annotations of imported modules.
 
+These limits apply to the mypy plugin only. The runtime stub generator described below is not subject
+to any of them, because it reads the views' real fields after import.
+
 
 Generating stub files for other type checkers
 ==============================================
@@ -92,109 +95,43 @@ Type checkers that do not run mypy plugins (pyright, Pylance, PyCharm) see a vie
 with an ``__init__(**data: Any)`` signature. Plain ``stubgen`` does not help either: it does not
 execute mypy plugins, so it produces the same empty view.
 
-The reliable approach is to drive mypy's build API **with the plugin enabled**, read the synthesised
-``__init__`` of each view, and write a ``.pyi`` stub from it. pydantic-views does not ship a console
-command for this, but the generator is small enough to keep as a script in your project. Save the
-following as, for example, ``gen_view_stubs.py``:
-
-.. code-block:: python
-
-   """Generate a .pyi stub of pydantic-views views, using the mypy plugin."""
-
-   from __future__ import annotations
-
-   import argparse
-   from pathlib import Path
-
-   from mypy import build
-   from mypy.modulefinder import BuildSource
-   from mypy.nodes import FuncDef, TypeInfo
-   from mypy.options import Options
-   from mypy.types import CallableType, Instance, get_proper_type
-
-   from pydantic_views.mypy import ROOTVIEW_FULLNAME, VIEW_FULLNAME
-
-   def render(typ) -> str:
-       typ = get_proper_type(typ)
-       if isinstance(typ, Instance):
-           if typ.args:
-               return f"{typ.type.name}[{', '.join(render(a) for a in typ.args)}]"
-           return typ.type.name
-       return "Any" if typ is None else str(typ)
-
-   def stub_for(info: TypeInfo) -> str:
-       # The plugin synthesises an __init__ whose keyword-only parameters are exactly the view's
-       # fields (source-model fields kept by the access rules, plus any declared on the view body).
-       lines = [f"class {info.name}(View[{render(info.bases[0].args[0])}]):"]
-       init = info.names.get("__init__")
-       if init and isinstance(init.node, FuncDef) and isinstance(init.node.type, CallableType):
-           sig = init.node.type
-           for name, typ, kind in zip(sig.arg_names, sig.arg_types, sig.arg_kinds):
-               if name in (None, "self", "__pydantic_self__") or kind.is_star():
-                   continue
-               default = " = ..." if kind.is_optional() else ""
-               lines.append(f"    {name}: {render(typ)}{default}")
-       return "\n".join(lines)
-
-   def main() -> None:
-       parser = argparse.ArgumentParser(description=__doc__)
-       parser.add_argument("--module", required=True, help="dotted module that declares the views")
-       parser.add_argument("--source", required=True, type=Path, help="path to that module's .py file")
-       parser.add_argument("--config", required=True, type=Path, help="mypy config (its [pydantic-views-mypy] options are honoured)")
-       parser.add_argument("--root", type=Path, default=Path.cwd(), help="import root (default: current directory)")
-       parser.add_argument("--output", type=Path, help="stub path (default: --source with a .pyi suffix)")
-       args = parser.parse_args()
-
-       options = Options()
-       # build.build() does NOT read the config file for the plugin list, so set it explicitly
-       # (pydantic_views.mypy must come before pydantic.mypy):
-       options.plugins = ["pydantic_views.mypy", "pydantic.mypy"]
-       options.config_file = str(args.config.resolve())
-       options.incremental = False
-       options.namespace_packages = True
-       options.explicit_package_bases = True
-       options.mypy_path = [str(args.root.resolve())]  # absolute paths; relative ones break resolution
-       result = build.build([BuildSource(str(args.source.resolve()), args.module, None)], options)
-
-       tree = result.graph[args.module].tree
-       if tree is None:
-           raise SystemExit(f"mypy did not analyse {args.module!r}")
-
-       blocks = ["from typing import Any, Literal\n\nfrom pydantic_views import View\n"]
-       for sym in tree.names.values():
-           node = sym.node
-           if (
-               isinstance(node, TypeInfo)
-               and node.has_base(VIEW_FULLNAME)
-               and node.fullname not in (VIEW_FULLNAME, ROOTVIEW_FULLNAME)
-           ):
-               blocks.append(stub_for(node))
-
-       out = args.output or args.source.with_suffix(".pyi")
-       out.write_text("\n\n".join(blocks) + "\n")
-       print(f"wrote {out}")
-
-   if __name__ == "__main__":
-       main()
-
-Run it from the command line, pointing it at the module that declares your views, that module's
-file, and your mypy config:
+pydantic-views ships its own stub generator, :mod:`pydantic_views.stubgen`, that solves this without
+mypy. It **imports** the target module, inspects the views at runtime, and writes a ``.pyi`` stub
+describing their real fields. Run it as a module, passing the importable name of the module to stub:
 
 .. code-block:: console
 
-   $ python gen_view_stubs.py \
-       --module myapp.models \
-       --source src/myapp/models.py \
-       --config mypy.ini \
-       --root src \
-       --output src/myapp/models.pyi
-   wrote src/myapp/models.pyi
+   $ python -m pydantic_views.stubgen myapp.models
+   wrote /path/to/myapp/models.pyi
 
-Drop the ``--output`` flag to write the stub next to ``--source`` (``models.py`` -> ``models.pyi``),
-and adjust ``--root`` to whatever directory is on your import path (often ``.`` or ``src``). Wire the
-command into a pre-commit hook or a ``make`` target to keep the stub in sync with your models.
+By default the stub is written next to its source file (``models.py`` -> ``models.pyi``). Pass a
+**package** name to walk every submodule, list **several modules** at once, and use ``-o`` /
+``--output-dir`` to mirror the package tree into a separate directory instead of writing the stubs in
+place:
 
-For a model like:
+.. code-block:: console
+
+   $ python -m pydantic_views.stubgen myapp.models myapp.schemas --output-dir build/stubs
+
+Wire either command into a pre-commit hook or a ``make`` target to keep the stubs in sync with your
+models.
+
+
+What the stub contains
+----------------------
+
+Because the generator works from the imported module, each stub is a **complete** description of that
+module, not just its views:
+
+* every regular class — plain classes, enums (including ones nested inside a model), and Pydantic
+  models, with ``@computed_field`` properties rendered as read-only properties;
+* every view declared in the module;
+* every view **generated at runtime**, including the nested views built for referenced models
+  (``Address`` + ``Load`` -> ``AddressLoad``);
+* module-level functions, preserving PEP 695 type parameters.
+
+Each view is emitted with its real field set and a keyword-only ``__init__``, so other type checkers
+resolve attributes and constructor calls exactly as the mypy plugin would. For a model like:
 
 .. code-block:: python
 
@@ -206,26 +143,31 @@ For a model like:
    class AccountLoad(View[Account], preset=LoadPreset):
        pass
 
-the script emits a stub that other type checkers can read:
+the generator emits both the model and the view:
 
 .. code-block:: python
+
+   class Account(BaseModel):
+       id: int
+       username: str
+       password: str
+       def __init__(self, *, id: int, username: str, password: str) -> None: ...
 
    class AccountLoad(View[Account]):
        id: int
        username: str
        def __init__(self, *, id: int, username: str) -> None: ...
 
-.. warning::
+Reproducing the whole module is deliberate: a type checker treats an adjacent ``<module>.pyi`` as the
+complete description of the module and ignores the ``.py``, so a stub that listed only the views would
+hide every other symbol. Because the generator emits the regular classes, models, functions and views
+together, you can point it at any module — there is no need to isolate views in a dedicated module.
 
-   A type checker treats an adjacent ``<module>.pyi`` as the **complete** description of the module
-   and ignores the ``.py`` entirely. A stub that contains only the views would therefore hide every
-   other symbol (the source models, functions, constants, …). To avoid that, either:
+Because it reflects the runtime model rather than a static analysis, the generator also captures the
+views the mypy plugin cannot recover: those built with the ``**Preset._asdict()`` splat, views
+declared in a different module from their source model, and
+:class:`~pydantic_views.AccessTag` ``include_tags`` / ``exclude_tags`` filtering.
 
-   * declare your views in a **dedicated module** (e.g. ``views.py``) so its ``views.pyi`` only needs
-     to describe the views, or
-   * generate the rest of the module with ``stubgen`` first and splice the view classes from the
-     script into that complete stub.
-
-A complete, working reference — including readable type rendering, nested views, and a check that the
-stub's field set matches the runtime ``model_fields`` — lives in
+A runnable reference that stubs the bundled example models and verifies the generated field sets
+against the runtime ``model_fields`` lives in
 `examples/generate_stubs.py <https://github.com/alfred82santa/pydantic-views/blob/main/examples/generate_stubs.py>`_.

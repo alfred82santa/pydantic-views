@@ -18,6 +18,7 @@ Load              READ_AND_WRITE, READ_ONLY                                     
 from __future__ import annotations
 
 from datetime import datetime
+from enum import StrEnum
 from typing import Annotated, Literal
 
 from annotated_types import Gt
@@ -25,19 +26,38 @@ from pydantic import BaseModel, Field, computed_field
 
 from pydantic_views import (
     AccessMode,
+    AccessTag,
+    CreatePreset,
     Hidden,
     LoadPreset,
+    Preset,
     ReadOnly,
     ReadOnlyOnCreation,
+    UpdatePreset,
     View,
     WriteOnly,
     WriteOnlyOnCreation,
 )
 
 
+def get_user_display_name(user: User) -> str:
+    """A function that uses the generated views, to demonstrate that they are fully usable."""
+    user_load = UserLoad.model_validate(user)
+    return user_load.display_name
+
+
+class AddressType(StrEnum):
+    """An enum used to demonstrate that the mypy plugin preserves enum types."""
+
+    HOME = "home"
+    WORK = "work"
+    OTHER = "other"
+
+
 class Address(BaseModel):
     """A nested model referenced by ``User``."""
 
+    type: AddressType
     street: str
     number: int
     zip_code: ReadOnly[str]
@@ -45,6 +65,14 @@ class Address(BaseModel):
 
 
 class Role(BaseModel):
+    class RoleType(StrEnum):
+        """A nested enum used to demonstrate that the mypy plugin preserves nested enums."""
+
+        ADMIN = "admin"
+        USER = "user"
+        GUEST = "guest"
+
+    type: RoleType
     name: str
     level: Annotated[int, AccessMode.READ_ONLY, Gt(0)]
 
@@ -200,3 +228,28 @@ class AccountLoad(View[Account], preset=LoadPreset):
     keeps exactly the readable fields (``id``, ``username``) and drops write-only ``password`` —
     identical to the explicit-keyword views above.
     """
+
+
+InternalCreatePreset = Preset(
+    view_name="InternalCreate",
+    access_modes=CreatePreset.access_modes,
+    include_tags=(AccessTag("internal-updatable"),),
+    all_optional=CreatePreset.all_optional,
+    all_nullable=CreatePreset.all_nullable,
+    hide_default_null=CreatePreset.hide_default_null,
+    include_computed_fields=CreatePreset.include_computed_fields,
+)
+
+InternalUpdatePreset = Preset(
+    view_name="InternalUpdate",
+    access_modes=UpdatePreset.access_modes,
+    include_tags=(AccessTag("internal-updatable"),),
+    all_optional=UpdatePreset.all_optional,
+    all_nullable=UpdatePreset.all_nullable,
+    hide_default_null=UpdatePreset.hide_default_null,
+    include_computed_fields=UpdatePreset.include_computed_fields,
+)
+
+
+var_int: int = 42
+var_str: str = "hello"

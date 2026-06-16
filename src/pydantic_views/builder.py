@@ -1,6 +1,5 @@
 from collections.abc import Iterable, Mapping
 from functools import reduce
-from tkinter import NONE
 from types import NoneType, UnionType
 from typing import (
     Annotated,
@@ -226,7 +225,7 @@ class Builder:
 
     def _map_annotation(
         self, annotation: type[Any] | None, *, ignore_nullable: bool = False
-    ) -> type[Any] | ForwardRef | NONE | UnionType:
+    ) -> type[Any] | ForwardRef | None | UnionType:
         def finish_annotation(a: type[Any] | None) -> type[Any] | None | UnionType:
             if not ignore_nullable and self.all_nullable and a is not Ellipsis:  # type: ignore
                 return a | None  # type: ignore

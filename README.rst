@@ -68,6 +68,7 @@ Features
 - Custom access tags for fine-grained, per-view field selection.
 - Helpers to build a view from a model, build a model from a view, and merge a view into a model.
 - Fully typed with a shipped ``py.typed`` marker and an extensive test suite.
+- Static type checking via a bundled mypy plugin and a ``.pyi`` stub generator for other type checkers.
 - Open source and published on PyPI.
 
 
@@ -510,10 +511,18 @@ fields with their generated views (``Address`` + ``Load`` -> ``AddressLoad``):
    reveal_type(UserLoad.model_validate({}).id)   # int — the plugin knows the field exists
    UserLoad(password="secret")                    # error: write-only field is not in a load view
 
-For type checkers that don't run mypy plugins (pyright, PyCharm, …) you can turn the plugin's output
-into ``.pyi`` stubs. See
+For type checkers that don't run mypy plugins (pyright, Pylance, PyCharm, …), pydantic-views ships a
+stub generator. It imports your module and writes a ``.pyi`` describing every view's real fields
+(plus the regular classes, models and functions around them):
+
+.. code-block:: bash
+
+   python -m pydantic_views.stubgen myapp.models
+
+Pass a package name to stub every submodule, list several modules at once, and use ``-o/--output-dir``
+to write the stubs to a separate tree. See
 `Type checking and stub files <https://pydantic-views.readthedocs.io/stable/type_checking.html>`_
-for the plugin options, the stub-generation CLI, and the full list of what is and isn't analysed
+for the stub generator and mypy plugin options, and the full list of what is and isn't analysed
 statically.
 
 
