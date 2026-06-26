@@ -116,6 +116,8 @@ format = "ruff format **/src/**/*.py **/tests/**/*.py **/examples/**/*.py"
 "format:check" = "ruff format **/src/**/*.py **/tests/**/*.py **/examples/**/*.py --check"
 lint = "ruff check **/src/**/*.py **/tests/**/*.py **/examples/**/*.py"
 "lint:fix" = "ruff check **/src/**/*.py **/tests/**/*.py **/examples/**/*.py --fix"
+stubgen = "python -m pydantic_views.stubgen"
+"stubgen:examples" = "python -m pydantic_views.stubgen examples.models"
 
 [tool.poe.tasks.clean]
 cmd = """
@@ -125,6 +127,9 @@ rm -rf ./**/src/**/*.pyc
        ./**/tests/**/*.pyc
        ./**/tests/**/*.pyo
        ./**/tests/**/__pycache__
+       ./**/examples/**/*.pyc
+       ./**/examples/**/*.pyo
+       ./**/examples/**/__pycache__
        .coverage
        coverage.xml
        pytest.xml

@@ -36,6 +36,8 @@ import pkgutil
 import sys
 import types
 import typing
+from collections.abc import Iterable
+from itertools import chain
 from pathlib import Path
 from typing import Any, get_args, get_origin
 
@@ -270,6 +272,29 @@ def _render_init(model: type[BaseModel], imports: Imports) -> str:
     return f"    def __init__({signature}) -> None: ..."
 
 
+def _render_methods(cls: type, imports: Imports, ignore_meth: tuple[str, ...] = ()) -> list[str]:
+    lines: list[str] = []
+    for name, member in vars(cls).items():
+        if name in ignore_meth:
+            continue
+        # if name.startswith("__") and name not in ("__init__", "__call__"):
+        #    continue
+        if isinstance(member, (staticmethod, classmethod)):
+            decorator = "staticmethod" if isinstance(member, staticmethod) else "classmethod"
+            lines.append(f"    @{decorator}")
+            lines.append(f"    {_render_def(name, member.__func__, imports)}")
+        elif inspect.isfunction(member):
+            lines.append(f"    {_render_def(name, member, imports)}")
+        elif isinstance(member, property) and member.fget is not None:
+            lines.append("    @property")
+            lines.append(f"    {_render_def(name, member.fget, imports)}")
+
+            if member.fset is not None:
+                lines.append(f"    @{name}.setter")
+                lines.append(f"    {_render_def(name, member.fset, imports)}")
+    return lines
+
+
 def _render_model(cls: type[BaseModel], imports: Imports) -> str:
     """Render a stub for a Pydantic model or view."""
     if _is_concrete_view(cls):
@@ -283,14 +308,12 @@ def _render_model(cls: type[BaseModel], imports: Imports) -> str:
     for name, field in cls.model_fields.items():
         lines.append(f"    {name}: {render_annotation(field.annotation, imports)}")
 
-    # Computed fields are not declared in ``model_fields``; expose them as read-only properties.
-    # (View builders fold computed fields into ``model_fields`` already, so this only fires for
-    # regular models.)
-    for name, computed in cls.model_computed_fields.items():
-        lines.append("    @property")
-        lines.append(f"    def {name}(self) -> {render_annotation(computed.return_type, imports)}: ...")
+    lines.append("")  # blank line before __init__ and methods
 
     lines.append(_render_init(cls, imports))
+
+    lines.extend(_render_methods(cls, imports))
+
     return "\n".join(lines)
 
 
@@ -299,6 +322,17 @@ def _render_enum(cls: type[enum.Enum], imports: Imports) -> str:
     for member in cls:
         value = repr(member.value) if isinstance(member.value, _SIMPLE_LITERALS) else "..."
         lines.append(f"    {member.name} = {value}")
+
+    lines.append("")  # blank line before __init__ and methods
+
+    lines.extend(
+        _render_methods(
+            cls,
+            imports,
+            ignore_meth=("_generate_next_value_", "_new_member_", "__new__"),
+        )
+    )
+
     return "\n".join(lines)
 
 
@@ -312,18 +346,10 @@ def _render_plain_class(cls: type, imports: Imports) -> str:
     for name, annotation in annotations.items():
         lines.append(f"    {name}: {render_annotation(annotation, imports)}")
 
-    for name, member in vars(cls).items():
-        if name.startswith("__") and name not in ("__init__", "__call__"):
-            continue
-        if isinstance(member, (staticmethod, classmethod)):
-            decorator = "staticmethod" if isinstance(member, staticmethod) else "classmethod"
-            lines.append(f"    @{decorator}")
-            lines.append(f"    {_render_def(name, member.__func__, imports)}")
-        elif inspect.isfunction(member):
-            lines.append(f"    {_render_def(name, member, imports)}")
-        elif isinstance(member, property) and member.fget is not None:
-            lines.append("    @property")
-            lines.append(f"    {_render_def(name, member.fget, imports)}")
+    if len(lines) > 1:
+        lines.append("")  # blank line before __init__ and methods
+
+    lines.extend(_render_methods(cls, imports))
 
     if len(lines) == 1:
         lines.append("    ...")
@@ -527,18 +553,46 @@ def _output_path(module: types.ModuleType, output_dir: Path | None) -> Path:
     return (output_dir / relative).with_suffix(".pyi")
 
 
-def generate(module_name: str, output_dir: Path | None = None) -> list[Path]:
+def load_modules(module_name: str) -> Iterable[types.ModuleType]:
     """Generate stubs for ``module_name`` and its children, returning the written paths."""
     root = importlib.import_module(module_name)
-    written: list[Path] = []
     for module in iter_module_tree(root):
         if getattr(module, "__file__", None) is None:
             continue
-        path = _output_path(module, output_dir)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(render_module(module))
-        written.append(path)
-    return written
+        yield module
+
+
+def generate(module: types.ModuleType, output_dir: Path | None = None) -> Path:
+    """Generate stubs for ``module``, returning the written path."""
+    path = _output_path(module, output_dir)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(render_module(module))
+    return path
+
+
+def reformat_stub(path: Path) -> None:
+    """Reformat a stub file in place with ``ruff`` if it is installed."""
+    try:
+        from ruff import find_ruff_bin
+    except ImportError:  # pragma: no cover
+        return
+    import subprocess
+
+    try:
+        subprocess.check_output(
+            [find_ruff_bin(), "format", path],
+            stderr=subprocess.DEVNULL,
+        )
+    except subprocess.CalledProcessError:  # pragma: no cover
+        print(f"warning: ruff failed to format {path}, leaving it unformatted")
+
+    try:
+        subprocess.check_output(
+            [find_ruff_bin(), "check", "--fix", "--ignore", "F821", path],
+            stderr=subprocess.DEVNULL,
+        )
+    except subprocess.CalledProcessError:  # pragma: no cover
+        print(f"warning: ruff failed to fix {path}, leaving it unformatted")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -564,9 +618,14 @@ def main(argv: list[str] | None = None) -> int:
     if "" not in sys.path and "." not in sys.path:
         sys.path.insert(0, "")
 
-    for module_name in args.modules:
-        for path in generate(module_name, args.output_dir):
-            print(f"wrote {path}")
+    # Preload all modules to avoid import-time side effects when generating stubs for submodules.
+    modules = list(chain.from_iterable(load_modules(name) for name in args.modules))
+
+    for module in modules:
+        path = generate(module, args.output_dir)
+        reformat_stub(path)
+        print(f"wrote {path}")
+
     return 0
 
 

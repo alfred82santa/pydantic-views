@@ -35,6 +35,7 @@ from pydantic_views.stubgen import (
     _target_names,
     generate,
     iter_module_tree,
+    load_modules,
     main,
     render_annotation,
     render_module,
@@ -581,23 +582,24 @@ def test_output_path_package_init(tmp_path: Path) -> None:
 # generate / main
 # ---------------------------------------------------------------------------
 def test_generate_writes_parsable_stub(tmp_path: Path) -> None:
-    written = generate("examples.models", tmp_path)
-    assert written == [tmp_path / "examples" / "models.pyi"]
-    _parse(written[0].read_text())
+    modules = list(load_modules("examples.models"))
+    path = generate(modules[0], tmp_path)
+    assert path == tmp_path / "examples" / "models.pyi"
+    _parse(path.read_text())
 
 
 def test_generate_whole_package_parses(tmp_path: Path) -> None:
-    written = generate("pydantic_views", tmp_path)
-    assert len(written) > 1
-    for path in written:
-        _parse(path.read_text())
+    modules = list(load_modules("pydantic_views"))
+    path = generate(modules[0], tmp_path)
+    _parse(path.read_text())
 
 
 def test_generate_skips_module_without_file(monkeypatch: pytest.MonkeyPatch) -> None:
     fake = types.ModuleType("fake_namespace_pkg")  # a namespace-style module has no ``__file__``
     monkeypatch.setattr(stubgen_module.importlib, "import_module", lambda name: fake)
     monkeypatch.setattr(stubgen_module, "iter_module_tree", lambda module: [fake])
-    assert generate("fake_namespace_pkg") == []
+    modules = list(load_modules("fake_namespace_pkg"))
+    assert modules == []
 
 
 def test_main_returns_zero_and_reports(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:

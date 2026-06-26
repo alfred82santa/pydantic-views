@@ -80,13 +80,6 @@ class Address(BaseModel):
     def full_address(self) -> str:
         return f"{self.street} {self.number}, {self.zip_code}"
 
-    @full_address.setter
-    def full_address(self, value: str) -> None:
-        street, number, zip_code = value.split(", ")
-        self.street = street
-        self.number = int(number)
-        self.zip_code = zip_code
-
     @classmethod
     def from_string(cls, address_str: str) -> Address:
         """A classmethod that uses the generated views, to demonstrate that they are fully usable."""

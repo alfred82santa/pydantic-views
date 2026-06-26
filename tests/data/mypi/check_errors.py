@@ -11,7 +11,7 @@ field filtering regresses.
 
 from __future__ import annotations
 
-from examples.models import AccountCreate, AccountLoad, UserLoad, UserUpdate
+from .models import AccountCreate, AccountLoad, UserLoad, UserUpdate
 
 # `id` is read-only -> not a writable field, so the (all-optional) Update view rejects it.
 UserUpdate(id=1)  # type: ignore[call-arg]
