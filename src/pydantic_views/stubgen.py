@@ -170,17 +170,33 @@ def _render_special_form(origin: Any, imports: Imports) -> str:
     return str(origin)
 
 
+def _render_base_ref(base: type, imports: Imports) -> str:
+    """Render a single base class, preserving Pydantic generic parametrization.
+
+    Subscripting a generic model (``EntityList[User]``) yields a concrete subclass whose
+    ``__qualname__`` carries a ``[...]`` suffix that is not directly importable. Pydantic records the
+    real origin and type arguments in ``__pydantic_generic_metadata__``; use them to rebuild a valid
+    ``Origin[Arg, ...]`` reference. Plain (non-generic) bases fall back to a bare import.
+    """
+    meta = getattr(base, "__pydantic_generic_metadata__", None)
+    if meta and meta.get("origin") is not None and meta.get("args"):
+        origin = imports.ref(meta["origin"])
+        args = ", ".join(render_annotation(arg, imports) for arg in meta["args"])
+        return f"{origin}[{args}]"
+    return imports.ref(base)
+
+
 def _render_bases(cls: type, imports: Imports) -> str:
-    """Render a class's base list, dropping ``object``/``Generic`` and parametrization suffixes.
+    """Render a class's base list, dropping ``object`` / ``Generic``.
 
     Pydantic builds concrete generic subclasses whose ``__qualname__`` contains a ``[...]`` suffix
-    (e.g. ``RootModel[TypeVar]``); the bare class name is what is actually importable.
+    (e.g. ``RootModel[TypeVar]``); :func:`_render_base_ref` rebuilds a valid reference for those.
     """
     rendered: list[str] = []
     for base in cls.__bases__:
         if base is object or base is typing.Generic:
             continue
-        rendered.append(imports.ref(base))
+        rendered.append(_render_base_ref(base, imports))
     return ", ".join(rendered) if rendered else "object"
 
 
@@ -275,6 +291,9 @@ def _render_init(model: type[BaseModel], imports: Imports) -> str:
 def _render_methods(cls: type, imports: Imports, ignore_meth: tuple[str, ...] = ()) -> list[str]:
     lines: list[str] = []
     for name, member in vars(cls).items():
+        if name in ("__annotate_func__", "__pydantic_self__", "__pydantic_validator__"):
+            continue
+
         if name in ignore_meth:
             continue
         # if name.startswith("__") and name not in ("__init__", "__call__"):
@@ -588,7 +607,7 @@ def reformat_stub(path: Path) -> None:
 
     try:
         subprocess.check_output(
-            [find_ruff_bin(), "check", "--fix", "--ignore", "F821", path],
+            [find_ruff_bin(), "check", "--fix", "--ignore", "F821,A002", path],
             stderr=subprocess.DEVNULL,
         )
     except subprocess.CalledProcessError:  # pragma: no cover

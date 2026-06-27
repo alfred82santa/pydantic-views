@@ -288,3 +288,18 @@ InternalUpdatePreset = Preset(
 
 var_int: int = 42
 var_str: str = "hello"
+
+
+class EntityList[T: BaseModel](BaseModel):
+    """A model that demonstrates a list of nested models, to exercise the mypy plugin's recursive view generation."""
+
+    entities: list[T]
+    count: int
+
+
+class UserList(EntityList[User]):
+    """A concrete subclass of the generic ``EntityList`` model, to demonstrate that the mypy plugin
+    correctly generates views for generic models and their subclasses.
+    """
+
+    pass

@@ -85,6 +85,16 @@ class Outer(BaseModel):
     value: int
 
 
+# A generic model and a concrete subclass, to check that the parametrized base is preserved.
+class Container[T: BaseModel](BaseModel):
+    items: list[T]
+    total: int
+
+
+class AuthorContainer(Container[Author]):
+    pass
+
+
 # A plain (non-Pydantic, non-enum) class with every member kind.
 class Plain:
     attr: int
@@ -346,6 +356,16 @@ def test_render_model_rootview_base() -> None:
     rendered = _render_model(view, imports)
     assert rendered.startswith("class IntRootLoad(RootView[")
     assert _is_concrete_view(view)
+
+
+def test_generic_model_and_subclass_preserve_parametrization(stub: str) -> None:
+    tree = _parse(stub)
+
+    generic = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "Container")
+    assert ast.unparse(generic.type_params[0]) == "T: BaseModel"  # PEP 695 type parameter kept
+
+    subclass = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "AuthorContainer")
+    assert ast.unparse(subclass.bases[0]) == "Container[Author]"  # parametrized base kept
 
 
 # ---------------------------------------------------------------------------

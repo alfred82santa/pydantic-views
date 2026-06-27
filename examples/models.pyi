@@ -251,6 +251,18 @@ class AccountLoad(View[Account]):
 
     def __init__(self, *, id: int, username: str) -> None: ...
 
+class EntityList[T: BaseModel](BaseModel):
+    entities: list[T]
+    count: int
+
+    def __init__(self, *, entities: list[T], count: int) -> None: ...
+
+class UserList(EntityList[User]):
+    entities: list[User]
+    count: int
+
+    def __init__(self, *, entities: list[User], count: int) -> None: ...
+
 class AddressCreate(View[Address]):
     type: AddressType
     street: str
