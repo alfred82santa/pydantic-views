@@ -17,16 +17,24 @@ from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).resolve().parent.parent
-EXAMPLES = ROOT / "examples"
-CONFIG = EXAMPLES / "mypy.ini"
+ROOT = Path(__file__).parent
+DATA_MYPI = ROOT / "data" / "mypi"
+CONFIG = DATA_MYPI / "mypy.ini"
 
 pytestmark = pytest.mark.skipif(not CONFIG.exists(), reason="examples not available")
 
 
 def _run_mypy(*targets: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [sys.executable, "-m", "mypy", "--no-incremental", "--config-file", str(CONFIG), *targets],
+        [
+            sys.executable,
+            "-m",
+            "mypy",
+            "--no-incremental",
+            "--config-file",
+            str(CONFIG),
+            *targets,
+        ],
         cwd=ROOT,
         capture_output=True,
         text=True,
@@ -34,18 +42,18 @@ def _run_mypy(*targets: str) -> subprocess.CompletedProcess[str]:
 
 
 def test_positive_assertions_type_check_clean():
-    result = _run_mypy(str(EXAMPLES / "check_views.py"))
+    result = _run_mypy(str(DATA_MYPI / "check_views.py"))
     assert "Success" in result.stdout, result.stdout + result.stderr
 
 
 def test_expected_errors_all_fire():
     # warn_unused_ignores=true means a missing plugin error becomes an "unused ignore" failure.
-    result = _run_mypy(str(EXAMPLES / "check_errors.py"))
+    result = _run_mypy(str(DATA_MYPI / "check_errors.py"))
     assert "Success" in result.stdout, result.stdout + result.stderr
 
 
 def test_plugin_field_sets_match_runtime_builder():
-    sys.path.insert(0, str(EXAMPLES))
+    sys.path.insert(0, str(DATA_MYPI))
     try:
         import generate_stubs  # type: ignore[import-not-found]
     finally:

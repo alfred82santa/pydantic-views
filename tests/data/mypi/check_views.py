@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import reveal_type
 
-from examples.models import AccountCreate, AccountLoad, UserLoad, UserUpdate
+from .models import AccountCreate, AccountLoad, UserLoad, UserUpdate
 
 # --- Update: every kept field is optional, write-only `password` is accepted --------------------
 UserUpdate()

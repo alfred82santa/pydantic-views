@@ -233,6 +233,7 @@ Which is equivalent to:
    class ExampleModelLoad(BaseModel):
        field_str: str
        field_int: Annotated[int, Gt(5)]
+       field_read_only_str: str
        field_computed_field: int
 
 Build an update view

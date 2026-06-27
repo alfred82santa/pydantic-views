@@ -204,7 +204,7 @@ class Builder:
         f_info = FieldInfo.merge_field_infos(
             f_info,
             annotation=self._map_annotation(f_info.annotation, ignore_nullable=ignore_nullable),
-            metadata=[m for m in f_info.metadata if not isinstance(m, AccessMode)],
+            metadata=[m for m in f_info.metadata if not isinstance(m, (AccessMode, AccessTag))],
         )
 
         if self.all_optional:
