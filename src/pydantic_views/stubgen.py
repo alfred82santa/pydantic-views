@@ -413,33 +413,6 @@ def _render_class(cls: type, imports: Imports) -> str:
     return _inject_nested(cls, rendered, imports)
 
 
-def _collect_runtime_views(module: types.ModuleType) -> list[type[View[Any]]]:
-    """Collect views generated at runtime for models defined in ``module``.
-
-    These views (e.g. the nested ``AddressLoad``) live in their source model's view manager but are
-    never assigned as module attributes, so they would be missed by a plain ``vars(module)`` scan.
-    """
-    views: dict[str, type[View[Any]]] = {}
-    for obj in vars(module).values():
-        if not (isinstance(obj, type) and issubclass(obj, BaseModel)):
-            continue
-        if obj.__module__ != module.__name__:
-            continue
-        manager = getattr(obj, "model_views", None)
-        if manager is None:
-            continue
-        for view_cls in manager._views.values():
-            # Skip Pydantic-internal parametrized generics such as ``View[Any]`` (their names are
-            # not valid identifiers); keep only concrete, named views for this module.
-            if (
-                _is_concrete_view(view_cls)
-                and view_cls.__module__ == module.__name__
-                and view_cls.__name__.isidentifier()
-                and "[" not in view_cls.__qualname__
-            ):
-                views[view_cls.__name__] = view_cls
-    return list(views.values())
-
 
 def _target_names(target: ast.expr) -> list[str]:
     """Return the simple names bound by an assignment target (handling tuple/list unpacking)."""
@@ -513,18 +486,18 @@ def _render_module_variables(module: types.ModuleType, imports: Imports, skip: s
 def render_module(module: types.ModuleType) -> str:
     """Render the full ``.pyi`` text for a single module."""
     imports = Imports(module.__name__)
-    emitted: set[int] = set()
     emitted_names: set[str] = set()
     blocks: list[str] = []
     functions: list[str] = []
 
-    # 1. Members declared in the module, in definition order. Pydantic registers parametrized
-    # generics (e.g. ``View[Any]``) as module attributes whose ``__name__`` is not a valid
-    # identifier; those are implementation details and must be skipped.
+    # 1. All classes and functions defined in the module, in attribute order. This covers both
+    # classes declared in the source and views generated at runtime by the builders — both are
+    # module attributes (the builder calls ``setattr`` on the module). Pydantic registers
+    # parametrized generics (e.g. ``View[Any]``) as module attributes whose ``__name__`` is not a
+    # valid identifier; those are implementation details and must be skipped.
     for name, obj in vars(module).items():
         if isinstance(obj, type) and obj.__module__ == module.__name__ and obj.__name__.isidentifier():
             blocks.append(_render_class(obj, imports))
-            emitted.add(id(obj))
             emitted_names.add(obj.__name__)
         # Use the attribute name, not ``obj.__name__``: a module-level lambda is bound to a real
         # name but reports ``__name__`` as ``"<lambda>"``.
@@ -532,14 +505,7 @@ def render_module(module: types.ModuleType) -> str:
             functions.append(_render_def(name, obj, imports))
             emitted_names.add(name)
 
-    # 2. Views generated at runtime that are not module attributes, sorted for stable output.
-    runtime_views = [v for v in _collect_runtime_views(module) if id(v) not in emitted]
-    for view_cls in sorted(runtime_views, key=lambda v: v.__name__):
-        blocks.append(_render_model(view_cls, imports))
-        emitted.add(id(view_cls))
-        emitted_names.add(view_cls.__name__)
-
-    # 3. Module-level variables and constants defined in the module.
+    # 2. Module-level variables and constants defined in the module.
     variables = _render_module_variables(module, imports, emitted_names)
 
     header = (

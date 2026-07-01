@@ -1,3 +1,4 @@
+import sys
 from collections.abc import Iterable, Mapping
 from functools import reduce
 from types import NoneType, UnionType
@@ -191,6 +192,7 @@ class Builder:
                 ),
             )
 
+            setattr(sys.modules[model.__module__], view_name, view)
             self._views[model] = cast(type[View[BaseModel]], view)
 
         return view
