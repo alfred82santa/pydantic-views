@@ -413,7 +413,6 @@ def _render_class(cls: type, imports: Imports) -> str:
     return _inject_nested(cls, rendered, imports)
 
 
-
 def _target_names(target: ast.expr) -> list[str]:
     """Return the simple names bound by an assignment target (handling tuple/list unpacking)."""
     if isinstance(target, ast.Name):
