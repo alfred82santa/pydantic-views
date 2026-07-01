@@ -25,3 +25,6 @@ docs/build
 uv.lock
 
 pytest.xml
+
+# Claude
+.claude

@@ -16,10 +16,8 @@ from pydantic import BaseModel, RootModel, computed_field
 
 from pydantic_views import AccessMode, Builder, ReadOnly, RootView, View, WriteOnly
 from pydantic_views import stubgen as stubgen_module
-from pydantic_views.builder import ensure_model_views
 from pydantic_views.stubgen import (
     Imports,
-    _collect_runtime_views,
     _inject_nested,
     _is_concrete_view,
     _module_assigned_names,
@@ -346,10 +344,15 @@ def test_render_model_view_and_computed_property(stub: str) -> None:
 
 
 def test_render_model_rootview_base() -> None:
+    import sys
+
     class IntRoot(RootModel[int]):
         pass
 
     view = Builder("Load", access_modes=(AccessMode.READ_AND_WRITE, AccessMode.READ_ONLY)).build_view(IntRoot)
+    # The builder sets the view as a module attribute; remove it so it does not pollute the module
+    # namespace and corrupt subsequent stubs rendered from this module.
+    sys.modules[IntRoot.__module__].__dict__.pop(view.__name__, None)
     imports = Imports(IntRoot.__module__)
     from pydantic_views.stubgen import _render_model
 
@@ -415,40 +418,14 @@ def test_inject_nested_single_line_header(imports: Imports) -> None:
 
 
 # ---------------------------------------------------------------------------
-# _collect_runtime_views
+# runtime-generated views (builder sets them as module attributes)
 # ---------------------------------------------------------------------------
-def test_collect_runtime_views_includes_generated_view() -> None:
+def test_stub_includes_builder_generated_view() -> None:
     import tests.test_stubgen as module
     from pydantic_views import BuilderUpdate
 
     BuilderUpdate().build_view(Author)
-    names = {v.__name__ for v in _collect_runtime_views(module)}
-    assert "AuthorUpdate" in names
-
-
-def test_collect_runtime_views_ignores_model_without_views() -> None:
-    isolated = types.ModuleType("isolated_mod")
-
-    class Lonely(BaseModel):
-        x: int
-
-    Lonely.__module__ = "isolated_mod"
-    isolated.Lonely = Lonely
-    isolated.not_a_class = 5
-    assert _collect_runtime_views(isolated) == []
-
-
-def test_collect_runtime_views_skips_non_concrete_entries() -> None:
-    isolated = types.ModuleType("isolated_mod2")
-
-    class Holder(BaseModel):
-        x: int
-
-    Holder.__module__ = "isolated_mod2"
-    isolated.Holder = Holder
-    # A manager entry that is not a concrete view must be filtered out.
-    ensure_model_views(Holder)._views["bogus"] = int
-    assert _collect_runtime_views(isolated) == []
+    assert "AuthorUpdate" in _class_names(render_module(module))
 
 
 # ---------------------------------------------------------------------------

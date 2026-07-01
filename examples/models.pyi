@@ -90,6 +90,20 @@ class User(BaseModel):
     @property
     def display_name(self) -> str: ...
 
+class AddressCreate(View[Address]):
+    type: AddressType
+    street: str
+    number: int
+    notes: str
+
+    def __init__(self, *, type: AddressType, street: str, number: int, notes: str = ...) -> None: ...
+
+class RoleCreate(View[Role]):
+    type: Role.RoleType
+    name: str
+
+    def __init__(self, *, type: Role.RoleType, name: str) -> None: ...
+
 class UserCreate(View[User]):
     name: str
     kind: Literal["person", "bot"]
@@ -112,6 +126,21 @@ class UserCreate(View[User]):
         addresses: list[AddressCreate] = ...,
         roles: dict[str, RoleCreate] = ...,
     ) -> None: ...
+
+class AddressCreateResult(View[Address]):
+    type: AddressType
+    street: str
+    number: int
+    zip_code: str
+
+    def __init__(self, *, type: AddressType, street: str, number: int, zip_code: str) -> None: ...
+
+class RoleCreateResult(View[Role]):
+    type: Role.RoleType
+    name: str
+    level: int
+
+    def __init__(self, *, type: Role.RoleType, name: str, level: int) -> None: ...
 
 class UserCreateResult(View[User]):
     name: str
@@ -140,6 +169,22 @@ class UserCreateResult(View[User]):
         display_name: str = ...,
     ) -> None: ...
 
+class AddressUpdate(View[Address]):
+    type: AddressType
+    street: str
+    number: int
+    notes: str | None
+
+    def __init__(
+        self, *, type: AddressType = ..., street: str = ..., number: int = ..., notes: str | None = ...
+    ) -> None: ...
+
+class RoleUpdate(View[Role]):
+    type: Role.RoleType
+    name: str
+
+    def __init__(self, *, type: Role.RoleType = ..., name: str = ...) -> None: ...
+
 class UserUpdate(View[User]):
     name: str
     kind: Literal["person", "bot"]
@@ -158,6 +203,21 @@ class UserUpdate(View[User]):
         addresses: list[AddressUpdate] = ...,
         roles: dict[str, RoleUpdate] = ...,
     ) -> None: ...
+
+class AddressLoad(View[Address]):
+    type: AddressType
+    street: str
+    number: int
+    zip_code: str
+
+    def __init__(self, *, type: AddressType, street: str, number: int, zip_code: str) -> None: ...
+
+class RoleLoad(View[Role]):
+    type: Role.RoleType
+    name: str
+    level: int
+
+    def __init__(self, *, type: Role.RoleType, name: str, level: int) -> None: ...
 
 class UserLoad(View[User]):
     name: str
@@ -184,6 +244,27 @@ class UserLoad(View[User]):
         display_name: str = ...,
     ) -> None: ...
 
+class AddressPatch(View[Address]):
+    type: AddressType | None
+    street: str | None
+    number: int | None
+    notes: str | None
+
+    def __init__(
+        self,
+        *,
+        type: AddressType | None = ...,
+        street: str | None = ...,
+        number: int | None = ...,
+        notes: str | None = ...,
+    ) -> None: ...
+
+class RolePatch(View[Role]):
+    type: Role.RoleType | None
+    name: str | None
+
+    def __init__(self, *, type: Role.RoleType | None = ..., name: str | None = ...) -> None: ...
+
 class UserPatch(View[User]):
     name: str | None
     kind: Literal["person", "bot"]
@@ -202,6 +283,20 @@ class UserPatch(View[User]):
         addresses: list[AddressPatch] | None = ...,
         roles: dict[str, RolePatch | None] | None = ...,
     ) -> None: ...
+
+class AddressSignup(View[Address]):
+    type: AddressType
+    street: str
+    number: int
+    notes: str
+
+    def __init__(self, *, type: AddressType, street: str, number: int, notes: str = ...) -> None: ...
+
+class RoleSignup(View[Role]):
+    type: Role.RoleType
+    name: str
+
+    def __init__(self, *, type: Role.RoleType, name: str) -> None: ...
 
 class UserSignup(View[User]):
     accept_terms: bool
@@ -262,100 +357,5 @@ class UserList(EntityList[User]):
     count: int
 
     def __init__(self, *, entities: list[User], count: int) -> None: ...
-
-class AddressCreate(View[Address]):
-    type: AddressType
-    street: str
-    number: int
-    notes: str
-
-    def __init__(self, *, type: AddressType, street: str, number: int, notes: str = ...) -> None: ...
-
-class AddressCreateResult(View[Address]):
-    type: AddressType
-    street: str
-    number: int
-    zip_code: str
-
-    def __init__(self, *, type: AddressType, street: str, number: int, zip_code: str) -> None: ...
-
-class AddressLoad(View[Address]):
-    type: AddressType
-    street: str
-    number: int
-    zip_code: str
-
-    def __init__(self, *, type: AddressType, street: str, number: int, zip_code: str) -> None: ...
-
-class AddressPatch(View[Address]):
-    type: AddressType | None
-    street: str | None
-    number: int | None
-    notes: str | None
-
-    def __init__(
-        self,
-        *,
-        type: AddressType | None = ...,
-        street: str | None = ...,
-        number: int | None = ...,
-        notes: str | None = ...,
-    ) -> None: ...
-
-class AddressSignup(View[Address]):
-    type: AddressType
-    street: str
-    number: int
-    notes: str
-
-    def __init__(self, *, type: AddressType, street: str, number: int, notes: str = ...) -> None: ...
-
-class AddressUpdate(View[Address]):
-    type: AddressType
-    street: str
-    number: int
-    notes: str | None
-
-    def __init__(
-        self, *, type: AddressType = ..., street: str = ..., number: int = ..., notes: str | None = ...
-    ) -> None: ...
-
-class RoleCreate(View[Role]):
-    type: Role.RoleType
-    name: str
-
-    def __init__(self, *, type: Role.RoleType, name: str) -> None: ...
-
-class RoleCreateResult(View[Role]):
-    type: Role.RoleType
-    name: str
-    level: int
-
-    def __init__(self, *, type: Role.RoleType, name: str, level: int) -> None: ...
-
-class RoleLoad(View[Role]):
-    type: Role.RoleType
-    name: str
-    level: int
-
-    def __init__(self, *, type: Role.RoleType, name: str, level: int) -> None: ...
-
-class RolePatch(View[Role]):
-    type: Role.RoleType | None
-    name: str | None
-
-    def __init__(self, *, type: Role.RoleType | None = ..., name: str | None = ...) -> None: ...
-
-class RoleSignup(View[Role]):
-    type: Role.RoleType
-    name: str
-
-    def __init__(self, *, type: Role.RoleType, name: str) -> None: ...
-
-class RoleUpdate(View[Role]):
-    type: Role.RoleType
-    name: str
-
-    def __init__(self, *, type: Role.RoleType = ..., name: str = ...) -> None: ...
 
 def get_user_display_name(user: User) -> str: ...
