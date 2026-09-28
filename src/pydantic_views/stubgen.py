@@ -394,6 +394,53 @@ def _render_enum(cls: type[enum.Enum], imports: Imports) -> str:
     return "\n".join(lines)
 
 
+def _render_typeddict(cls: type, imports: Imports) -> str:
+    """Render a TypedDict subclass stub.
+
+    ``__bases__`` always shows ``dict`` at runtime; the real bases (including the ``TypedDict``
+    callable and any parent TypedDicts) are preserved in ``__orig_bases__``.  Own fields are
+    computed by subtracting keys already declared on parent TypedDicts.
+    """
+    imports.add_typing("TypedDict")
+
+    # Reconstruct bases from __orig_bases__, skipping Generic[T] (encoded in type params).
+    rendered_bases: list[str] = []
+    for base in getattr(cls, "__orig_bases__", ()):
+        if base is typing.TypedDict:
+            rendered_bases.append("TypedDict")
+        elif get_origin(base) is typing.Generic:
+            continue  # type params emitted via _render_type_params
+        elif isinstance(base, type) and typing.is_typeddict(base):
+            rendered_bases.append(imports.ref(base))
+    if not rendered_bases:
+        rendered_bases = ["TypedDict"]
+
+    total_arg = "" if cls.__total__ else ", total=False"  # type: ignore
+    base_str = ", ".join(rendered_bases) + total_arg
+    type_params = _render_type_params(cls, imports)
+    header = f"class {cls.__name__}{type_params}({base_str}):"
+
+    # Only emit fields declared on this class, not inherited ones.
+    # TypedDict parent classes do not appear in __mro__ (only ``dict`` does); walk __orig_bases__.
+    parent_keys: set[str] = set()
+    for base in getattr(cls, "__orig_bases__", ()):
+        if isinstance(base, type) and typing.is_typeddict(base):
+            parent_keys |= set(base.__annotations__.keys())
+    own_annotations = {k: v for k, v in cls.__annotations__.items() if k not in parent_keys}
+
+    lines = [header]
+    for name, annotation in own_annotations.items():
+        lines.append(f"    {name}: {render_annotation(annotation, imports)}")
+
+    if len(lines) > 1:
+        lines.append("")
+    lines.extend(_render_methods(cls, imports))
+
+    if len(lines) == 1:
+        lines.append("    ...")
+    return "\n".join(lines)
+
+
 def _render_plain_class(cls: type, imports: Imports) -> str:
     base = _render_bases(cls, imports)
     name = f"{cls.__name__}{_render_type_params(cls, imports)}"
@@ -443,7 +490,9 @@ def _inject_nested(cls: type, rendered: str, imports: Imports) -> str:
 
 
 def _render_class(cls: type, imports: Imports) -> str:
-    if issubclass(cls, BaseModel):
+    if typing.is_typeddict(cls):
+        rendered = _render_typeddict(cls, imports)
+    elif issubclass(cls, BaseModel):
         rendered = _render_model(cls, imports)
     elif issubclass(cls, enum.Enum):
         rendered = _render_enum(cls, imports)

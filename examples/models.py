@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Annotated, Generic, Literal, Self, TypeVar
+from typing import Annotated, Generic, Literal, Self, TypedDict, TypeVar
 
 from annotated_types import Gt
 from pydantic import BaseModel, Field, computed_field
@@ -322,3 +322,8 @@ class EntityWithId(BaseModel, Generic[TVar]):  # noqa: UP046
 
 class EntityWithIdLoad(View[EntityWithId[TVar]], preset=LoadPreset):
     pass
+
+
+class ExampleTypedDict(TypedDict):
+    field: str
+    another_field: int

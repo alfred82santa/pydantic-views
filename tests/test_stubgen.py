@@ -9,7 +9,7 @@ import typing
 from abc import ABC
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, ClassVar, Literal
+from typing import Any, ClassVar, Literal, TypedDict
 
 import pytest
 from pydantic import BaseModel, RootModel, computed_field
@@ -30,6 +30,7 @@ from pydantic_views.stubgen import (
     _render_signature,
     _render_special_form,
     _render_type_params,
+    _render_typeddict,
     _target_names,
     generate,
     iter_module_tree,
@@ -113,6 +114,21 @@ class Plain:
 
 class Empty:
     pass
+
+
+# TypedDict fixtures for stub rendering tests.
+class FullTD(TypedDict):
+    name: str
+    age: int
+
+
+class PartialTD(TypedDict, total=False):
+    x: int
+    y: str
+
+
+class ChildTD(FullTD):
+    extra: bool
 
 
 # PEP 695 generic functions covering each kind of type parameter.
@@ -454,6 +470,67 @@ def test_render_plain_class_all_members(imports: Imports) -> None:
 
 def test_render_plain_class_empty(imports: Imports) -> None:
     assert _render_plain_class(Empty, imports) == "class Empty:\n    ..."
+
+
+# ---------------------------------------------------------------------------
+# _render_typeddict
+# ---------------------------------------------------------------------------
+def test_render_typeddict_total_true(imports: Imports) -> None:
+    rendered = _render_typeddict(FullTD, imports)
+    assert rendered.startswith("class FullTD(TypedDict):")
+    assert "name: str" in rendered
+    assert "age: int" in rendered
+    assert "from typing import TypedDict" in imports.render_block()
+
+
+def test_render_typeddict_total_false(imports: Imports) -> None:
+    rendered = _render_typeddict(PartialTD, imports)
+    assert "TypedDict, total=False" in rendered
+
+
+def test_render_typeddict_required_field(imports: Imports) -> None:
+    import textwrap
+    import types
+
+    src = textwrap.dedent("""
+        import typing
+        from typing import TypedDict
+        class MixedTD(TypedDict, total=False):
+            opt: int
+            req: typing.Required[str]
+    """)
+    mod = types.ModuleType("_test_mixedtd")
+    exec(compile(src, "<string>", "exec"), mod.__dict__)
+    MixedTD = mod.MixedTD
+
+    rendered = _render_typeddict(MixedTD, Imports("_test_mixedtd"))
+    assert "opt: int" in rendered
+    # Required[str] may be rendered as ``Required[str]`` or ``typing.Required[str]`` depending on
+    # whether the annotation was evaluated eagerly (actual type object) or lazily (string).
+    assert "req:" in rendered and "Required[str]" in rendered
+
+
+def test_render_typeddict_inheritance_omits_parent_fields(imports: Imports) -> None:
+    rendered = _render_typeddict(ChildTD, imports)
+    assert rendered.startswith("class ChildTD(FullTD):")
+    assert "extra: bool" in rendered
+    assert "name:" not in rendered
+    assert "age:" not in rendered
+
+
+def test_render_typeddict_empty_child(imports: Imports) -> None:
+    class EmptyChildTD(FullTD):
+        pass
+
+    rendered = _render_typeddict(EmptyChildTD, imports)
+    assert "    ..." in rendered
+
+
+def test_render_typeddict_in_module_stub(stub: str) -> None:
+    tree = _parse(stub)
+    td_node = next((n for n in ast.walk(tree) if isinstance(n, ast.ClassDef) and n.name == "FullTD"), None)
+    assert td_node is not None
+    assert ast.unparse(td_node.bases[0]) == "TypedDict"
 
 
 # ---------------------------------------------------------------------------
