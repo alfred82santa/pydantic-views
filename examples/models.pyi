@@ -3,7 +3,7 @@
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Literal, Self, TypeVar
+from typing import Literal, Self, TypedDict, TypeVar
 
 from pydantic import BaseModel
 
@@ -376,5 +376,9 @@ class EntityWithIdLoad[TVar: str | int = str](View[EntityWithId[TVar]]):
     id: TVar
 
     def __init__(self, *, id: TVar) -> None: ...
+
+class ExampleTypedDict(TypedDict):
+    field: str
+    another_field: int
 
 def get_user_display_name(user: User) -> str: ...
