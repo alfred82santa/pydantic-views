@@ -151,15 +151,9 @@ def render_annotation(tp: Any, imports: Imports) -> str:
             if params is Ellipsis:
                 rendered_params = "..."
             else:
-                rendered_params = (
-                    "[" + ", ".join(render_annotation(p, imports) for p in params) + "]"
-                )
+                rendered_params = "[" + ", ".join(render_annotation(p, imports) for p in params) + "]"
             return f"Callable[{rendered_params}, {render_annotation(ret, imports)}]"
-        base = (
-            imports.ref(origin)
-            if isinstance(origin, type)
-            else _render_special_form(origin, imports)
-        )
+        base = imports.ref(origin) if isinstance(origin, type) else _render_special_form(origin, imports)
         if args:
             return f"{base}[{', '.join(render_annotation(a, imports) for a in args)}]"
         return base
@@ -239,9 +233,7 @@ def _render_type_params(obj: Any, imports: Imports) -> str:
         if bound is not None:
             text += f": {render_annotation(bound, imports)}"
         elif constraints:
-            text += (
-                f": ({', '.join(render_annotation(c, imports) for c in constraints)})"
-            )
+            text += f": ({', '.join(render_annotation(c, imports) for c in constraints)})"
         rendered.append(text)
     return "[" + ", ".join(rendered) + "]"
 
@@ -299,9 +291,7 @@ def _render_init(model: type[BaseModel], imports: Imports) -> str:
     return f"    def __init__({signature}) -> None: ..."
 
 
-def _render_methods(
-    cls: type, imports: Imports, ignore_meth: tuple[str, ...] = ()
-) -> list[str]:
+def _render_methods(cls: type, imports: Imports, ignore_meth: tuple[str, ...] = ()) -> list[str]:
     lines: list[str] = []
     for name, member in vars(cls).items():
         if name in ("__annotate_func__", "__pydantic_self__", "__pydantic_validator__"):
@@ -312,9 +302,7 @@ def _render_methods(
         # if name.startswith("__") and name not in ("__init__", "__call__"):
         #    continue
         if isinstance(member, (staticmethod, classmethod)):
-            decorator = (
-                "staticmethod" if isinstance(member, staticmethod) else "classmethod"
-            )
+            decorator = "staticmethod" if isinstance(member, staticmethod) else "classmethod"
             lines.append(f"    @{decorator}")
             lines.append(f"    {_render_def(name, member.__func__, imports)}")
         elif inspect.isfunction(member):
@@ -352,13 +340,9 @@ def _render_model(cls: type[BaseModel], imports: Imports) -> str:
 
 
 def _render_enum(cls: type[enum.Enum], imports: Imports) -> str:
-    lines = [
-        f"class {cls.__name__}{_render_type_params(cls, imports)}({_render_bases(cls, imports)}):"
-    ]
+    lines = [f"class {cls.__name__}{_render_type_params(cls, imports)}({_render_bases(cls, imports)}):"]
     for member in cls:
-        value = (
-            repr(member.value) if isinstance(member.value, _SIMPLE_LITERALS) else "..."
-        )
+        value = repr(member.value) if isinstance(member.value, _SIMPLE_LITERALS) else "..."
         lines.append(f"    {member.name} = {value}")
 
     lines.append("")  # blank line before __init__ and methods
@@ -415,10 +399,7 @@ def _inject_nested(cls: type, rendered: str, imports: Imports) -> str:
     if not nested:
         return rendered
     indented = "\n\n".join(
-        "\n".join(
-            f"    {line}" if line.strip() else ""
-            for line in _render_class(child, imports).split("\n")
-        )
+        "\n".join(f"    {line}" if line.strip() else "" for line in _render_class(child, imports).split("\n"))
         for child in nested
     )
     header, _, body = rendered.partition("\n")
@@ -467,9 +448,7 @@ def _module_assigned_names(module: types.ModuleType) -> list[str]:
         if isinstance(node, ast.AnnAssign):
             targets = _target_names(node.target)
         elif isinstance(node, ast.Assign):
-            targets = [
-                name for target in node.targets for name in _target_names(target)
-            ]
+            targets = [name for target in node.targets for name in _target_names(target)]
         else:
             continue
         for name in targets:
@@ -479,9 +458,7 @@ def _module_assigned_names(module: types.ModuleType) -> list[str]:
     return names
 
 
-def _render_module_variables(
-    module: types.ModuleType, imports: Imports, skip: set[str]
-) -> list[str]:
+def _render_module_variables(module: types.ModuleType, imports: Imports, skip: set[str]) -> list[str]:
     """Render ``name: type`` lines for module-level variables defined in ``module``.
 
     Annotated variables use their declared annotation; the rest fall back to the runtime value's type.
@@ -521,20 +498,12 @@ def render_module(module: types.ModuleType) -> str:
     # parametrized generics (e.g. ``View[Any]``) as module attributes whose ``__name__`` is not a
     # valid identifier; those are implementation details and must be skipped.
     for name, obj in vars(module).items():
-        if (
-            isinstance(obj, type)
-            and obj.__module__ == module.__name__
-            and obj.__name__.isidentifier()
-        ):
+        if isinstance(obj, type) and obj.__module__ == module.__name__ and obj.__name__.isidentifier():
             blocks.append(_render_class(obj, imports))
             emitted_names.add(obj.__name__)
         # Use the attribute name, not ``obj.__name__``: a module-level lambda is bound to a real
         # name but reports ``__name__`` as ``"<lambda>"``.
-        elif (
-            inspect.isfunction(obj)
-            and obj.__module__ == module.__name__
-            and name.isidentifier()
-        ):
+        elif inspect.isfunction(obj) and obj.__module__ == module.__name__ and name.isidentifier():
             functions.append(_render_def(name, obj, imports))
             emitted_names.add(name)
 
@@ -556,9 +525,7 @@ def iter_module_tree(module: types.ModuleType) -> list[types.ModuleType]:
     """Return ``module`` and, if it is a package, all of its importable submodules."""
     modules = [module]
     if hasattr(module, "__path__"):
-        for info in pkgutil.walk_packages(
-            module.__path__, prefix=f"{module.__name__}."
-        ):
+        for info in pkgutil.walk_packages(module.__path__, prefix=f"{module.__name__}."):
             modules.append(importlib.import_module(info.name))
     return modules
 
