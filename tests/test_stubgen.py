@@ -184,6 +184,13 @@ def test_render_annotation_scalars(imports: Imports) -> None:
     assert render_annotation(int, imports) == "int"
 
 
+def test_render_annotation_self(imports: Imports) -> None:
+    from typing import Self
+
+    assert render_annotation(Self, imports) == "Self"
+    assert "from typing import Self" in imports.render_block()
+
+
 def test_render_annotation_string_and_forwardref(imports: Imports) -> None:
     assert render_annotation("SomeName", imports) == "SomeName"
     assert render_annotation(typing.ForwardRef("Fwd"), imports) == "Fwd"
