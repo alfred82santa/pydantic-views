@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Annotated, Literal
+from typing import Annotated, Generic, Literal, Self, TypeVar
 
 from annotated_types import Gt
 from pydantic import BaseModel, Field, computed_field
@@ -302,4 +302,23 @@ class UserList(EntityList[User]):
     correctly generates views for generic models and their subclasses.
     """
 
+    pass
+
+
+class EntityListCreate[T: BaseModel](View[EntityList[T]], preset=CreatePreset):
+    pass
+
+
+TVar = TypeVar("TVar", bound=str | int, default=str)
+
+
+class EntityWithId(BaseModel, Generic[TVar]):  # noqa: UP046
+    id: TVar
+
+    @classmethod
+    def with_id(cls, id: TVar) -> Self:
+        return cls(id=id)
+
+
+class EntityWithIdLoad(View[EntityWithId[TVar]], preset=LoadPreset):
     pass

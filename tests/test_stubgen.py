@@ -273,6 +273,42 @@ def test_render_bases_object_when_no_real_bases(imports: Imports) -> None:
     assert _render_bases(Empty, imports) == "object"
 
 
+def test_render_bases_old_style_generic_omits_generic(imports: Imports) -> None:
+    # Generic is dropped from bases; the type params are emitted by _render_type_params instead.
+    import typing
+
+    T = typing.TypeVar("T")
+
+    class OldStyleGeneric(typing.Generic[T]):
+        pass
+
+    assert _render_bases(OldStyleGeneric, imports) == "object"
+
+
+def test_render_bases_pep695_generic_omits_generic_base(imports: Imports) -> None:
+    # PEP 695 classes encode type params in __type_params__; Generic must not appear in bases.
+    assert "Generic" not in _render_bases(Container, imports)
+
+
+def test_render_type_params_old_style_typevar(imports: Imports) -> None:
+    import typing
+
+    T = typing.TypeVar("T", bound=int)
+
+    class OldStyleGeneric(typing.Generic[T]):
+        pass
+
+    assert _render_type_params(OldStyleGeneric, imports) == "[T: int]"
+
+
+def test_render_type_params_old_style_not_applied_to_pydantic_subclass(imports: Imports) -> None:
+    # Pydantic sets __orig_bases__ with Generic[T] internally on concrete subclasses.
+    # _render_type_params must not emit spurious params for those.
+    from tests.test_stubgen import AuthorContainer
+
+    assert _render_type_params(AuthorContainer, imports) == ""
+
+
 def test_is_concrete_view_false_for_base_and_non_view() -> None:
     assert _is_concrete_view(View) is False
     assert _is_concrete_view(RootView) is False
@@ -376,6 +412,22 @@ def test_generic_model_and_subclass_preserve_parametrization(stub: str) -> None:
 
     subclass = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "AuthorContainer")
     assert ast.unparse(subclass.bases[0]) == "Container[Author]"  # parametrized base kept
+
+
+def test_old_style_generic_view_gets_type_params_and_parametrized_base() -> None:
+    """A view of an old-style Generic[T] model must declare T and pass it to the root."""
+    import examples.models as mod
+    from pydantic_views.stubgen import render_module
+
+    stub = render_module(mod)
+    tree = _parse(stub)
+
+    cls_node = next(n for n in ast.walk(tree) if isinstance(n, ast.ClassDef) and n.name == "EntityWithIdLoad")
+    # class should carry the inherited type param in PEP 695 syntax
+    assert len(cls_node.type_params) == 1
+    assert ast.unparse(cls_node.type_params[0]) == "TVar: str | int = str"
+    # base should be View[EntityWithId[TVar]]
+    assert ast.unparse(cls_node.bases[0]) == "View[EntityWithId[TVar]]"
 
 
 # ---------------------------------------------------------------------------

@@ -190,10 +190,11 @@ def _render_base_ref(base: type, imports: Imports) -> str:
 
 
 def _render_bases(cls: type, imports: Imports) -> str:
-    """Render a class's base list, dropping ``object`` / ``Generic``.
+    """Render a class's base list, dropping ``object`` and ``Generic``.
 
-    Pydantic builds concrete generic subclasses whose ``__qualname__`` contains a ``[...]`` suffix
-    (e.g. ``RootModel[TypeVar]``); :func:`_render_base_ref` rebuilds a valid reference for those.
+    Type parameters — whether PEP 695 (``__type_params__``) or old-style (``Generic[TVar]``) — are
+    rendered separately by :func:`_render_type_params` as inline PEP 695 syntax on the class header,
+    so ``Generic`` never needs to appear in the base list.
     """
     rendered: list[str] = []
     for base in cls.__bases__:
@@ -214,9 +215,24 @@ def _is_concrete_view(cls: Any) -> bool:
     return True
 
 
-def _render_type_params(obj: Any, imports: Imports) -> str:
-    """Render PEP 695 type parameters (``[T, U: Bound]``) for a class or function, or ``""``."""
-    params = getattr(obj, "__type_params__", ())
+def _get_class_type_params(cls: type) -> tuple[Any, ...]:
+    """Return the type parameters of a class as a tuple of TypeVar/ParamSpec/TypeVarTuple objects.
+
+    Handles both PEP 695 classes (``__type_params__``) and old-style ``Generic[T]`` classes.
+    The ``typing.Generic in __bases__`` guard prevents picking up the ``__orig_bases__`` that
+    Pydantic's metaclass injects on concrete generic subclasses.
+    """
+    params = getattr(cls, "__type_params__", ())
+    if not params and typing.Generic in getattr(cls, "__bases__", ()):
+        params = next(
+            (get_args(b) for b in getattr(cls, "__orig_bases__", ()) if get_origin(b) is typing.Generic),
+            (),
+        )
+    return params
+
+
+def _render_param_list(params: tuple[Any, ...], imports: Imports) -> str:
+    """Render a tuple of type parameter objects as a PEP 695 ``[T, U: Bound, ...]`` string."""
     if not params:
         return ""
     rendered: list[str] = []
@@ -234,8 +250,17 @@ def _render_type_params(obj: Any, imports: Imports) -> str:
             text += f": {render_annotation(bound, imports)}"
         elif constraints:
             text += f": ({', '.join(render_annotation(c, imports) for c in constraints)})"
+        default = getattr(param, "__default__", typing.NoDefault)
+        if default is not typing.NoDefault:
+            text += f" = {render_annotation(default, imports)}"
         rendered.append(text)
     return "[" + ", ".join(rendered) + "]"
+
+
+def _render_type_params(obj: Any, imports: Imports) -> str:
+    """Render PEP 695 type parameters for a class or function, or ``""`` if none."""
+    params = _get_class_type_params(obj) if isinstance(obj, type) else getattr(obj, "__type_params__", ())
+    return _render_param_list(params, imports)
 
 
 def _render_def(name: str, func: Any, imports: Imports) -> str:
@@ -322,11 +347,22 @@ def _render_model(cls: type[BaseModel], imports: Imports) -> str:
     if _is_concrete_view(cls):
         view_base = "RootView" if issubclass(cls, RootView) else "View"
         imports.add("pydantic_views", view_base)
-        base = f"{view_base}[{render_annotation(cls.view_class_root(), imports)}]"  # type: ignore
+        root = cls.view_class_root()  # type: ignore[attr-defined]
+        root_params = _get_class_type_params(root)
+        own_params = _get_class_type_params(cls)
+        # Use the view's own params when declared (e.g. EntityListCreate[T]); otherwise inherit
+        # the root model's params so the view is correctly generic (e.g. EntityWithIdLoad[TVar]).
+        effective_params = own_params or root_params
+        root_ref = imports.ref(root)
+        if effective_params:
+            root_ref += "[" + ", ".join(p.__name__ for p in effective_params) + "]"
+        base = f"{view_base}[{root_ref}]"
+        type_params_str = _render_param_list(effective_params, imports)
     else:
         base = _render_bases(cls, imports)
+        type_params_str = _render_type_params(cls, imports)
 
-    lines = [f"class {cls.__name__}{_render_type_params(cls, imports)}({base}):"]
+    lines = [f"class {cls.__name__}{type_params_str}({base}):"]
     for name, field in cls.model_fields.items():
         lines.append(f"    {name}: {render_annotation(field.annotation, imports)}")
 

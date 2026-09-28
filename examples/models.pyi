@@ -3,7 +3,7 @@
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Literal
+from typing import Literal, Self, TypeVar
 
 from pydantic import BaseModel
 
@@ -14,6 +14,7 @@ InternalCreatePreset: Preset
 InternalUpdatePreset: Preset
 var_int: int
 var_str: str
+TVar: TypeVar
 
 class AddressType(StrEnum):
     HOME = "home"
@@ -357,5 +358,23 @@ class UserList(EntityList[User]):
     count: int
 
     def __init__(self, *, entities: list[User], count: int) -> None: ...
+
+class EntityListCreate[T: BaseModel](View[EntityList[T]]):
+    entities: list[T]
+    count: int
+
+    def __init__(self, *, entities: list[T], count: int) -> None: ...
+
+class EntityWithId[TVar: str | int = str](BaseModel):
+    id: TVar
+
+    def __init__(self, *, id: TVar) -> None: ...
+    @classmethod
+    def with_id(cls, id: TVar) -> Self: ...
+
+class EntityWithIdLoad[TVar: str | int = str](View[EntityWithId[TVar]]):
+    id: TVar
+
+    def __init__(self, *, id: TVar) -> None: ...
 
 def get_user_display_name(user: User) -> str: ...
