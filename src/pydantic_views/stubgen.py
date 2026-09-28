@@ -39,7 +39,7 @@ import typing
 from collections.abc import Iterable
 from itertools import chain
 from pathlib import Path
-from typing import Any, get_args, get_origin
+from typing import Any, Self, get_args, get_origin
 
 from pydantic import BaseModel
 
@@ -120,6 +120,9 @@ def render_annotation(tp: Any, imports: Imports) -> str:
         return "None"
     if tp is Ellipsis:
         return "..."
+    if tp is Self:
+        imports.add_typing("Self")
+        return "Self"
     if tp is Any:
         imports.add_typing("Any")
         return "Any"
