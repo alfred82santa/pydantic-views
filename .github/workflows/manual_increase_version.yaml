@@ -14,11 +14,7 @@ on:
           - patch
           - minor
           - major
-      ref:
-        description: "Base branch reference"
-        required: false
-        default: "develop"
-        type: string
+
 
 permissions:
   pull-requests: write
@@ -29,6 +25,6 @@ jobs:
     uses: ./.github/workflows/common_push_version.yaml
     with:
       level: ${{ inputs.level }}
-      ref: ${{ inputs.ref }}
+      ref: ${{ github.ref }}
     secrets:
       ACTIONS_GITHUB_TOKEN_PULL_REQUEST: ${{ secrets.ACTIONS_GITHUB_TOKEN_PULL_REQUEST }}
