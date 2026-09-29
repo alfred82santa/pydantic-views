@@ -325,6 +325,22 @@ def test_render_type_params_old_style_not_applied_to_pydantic_subclass(imports: 
     assert _render_type_params(AuthorContainer, imports) == ""
 
 
+def test_render_bases_generic_subclass_parametrizes_parent() -> None:
+    """A class that inherits from a generic model must render the parent with its TypeVar."""
+    import examples.models as mod
+    from pydantic_views.stubgen import render_module
+
+    stub = render_module(mod)
+    tree = _parse(stub)
+
+    descendent = next(n for n in ast.walk(tree) if isinstance(n, ast.ClassDef) and n.name == "Descendent")
+    # Class should carry TVar as a PEP 695 type param
+    assert len(descendent.type_params) == 1
+    assert ast.unparse(descendent.type_params[0]) == "TVar: str | int = str"
+    # Base should be EntityWithId[TVar], not bare EntityWithId
+    assert ast.unparse(descendent.bases[0]) == "EntityWithId[TVar]"
+
+
 def test_is_concrete_view_false_for_base_and_non_view() -> None:
     assert _is_concrete_view(View) is False
     assert _is_concrete_view(RootView) is False

@@ -173,19 +173,25 @@ def _render_special_form(origin: Any, imports: Imports) -> str:
     return str(origin)
 
 
-def _render_base_ref(base: type, imports: Imports) -> str:
-    """Render a single base class, preserving Pydantic generic parametrization.
+def _render_base_ref(base: type, imports: Imports, cls_params: tuple[Any, ...] = ()) -> str:
+    """Render a single base class, preserving generic parametrization.
 
-    Subscripting a generic model (``EntityList[User]``) yields a concrete subclass whose
-    ``__qualname__`` carries a ``[...]`` suffix that is not directly importable. Pydantic records the
-    real origin and type arguments in ``__pydantic_generic_metadata__``; use them to rebuild a valid
-    ``Origin[Arg, ...]`` reference. Plain (non-generic) bases fall back to a bare import.
+    * Concrete pydantic generics (``EntityList[User]``) carry origin and type args in
+      ``__pydantic_generic_metadata__``; those are used to rebuild ``Origin[Arg, ...]``.
+    * Generic bases with unbound TypeVar parameters (``EntityWithId`` when a subclass still
+      carries ``TVar``) are parametrized with ``cls_params``, the calling class's own params.
+    * Plain bases fall back to a bare import reference.
     """
     meta = getattr(base, "__pydantic_generic_metadata__", None)
     if meta and meta.get("origin") is not None and meta.get("args"):
         origin = imports.ref(meta["origin"])
         args = ", ".join(render_annotation(arg, imports) for arg in meta["args"])
         return f"{origin}[{args}]"
+    base_params = _get_class_type_params(base)
+    if base_params and cls_params:
+        ref = imports.ref(base)
+        passed = cls_params[: len(base_params)]
+        return f"{ref}[{', '.join(p.__name__ for p in passed)}]"
     return imports.ref(base)
 
 
@@ -196,11 +202,12 @@ def _render_bases(cls: type, imports: Imports) -> str:
     rendered separately by :func:`_render_type_params` as inline PEP 695 syntax on the class header,
     so ``Generic`` never needs to appear in the base list.
     """
+    cls_params = _get_class_type_params(cls)
     rendered: list[str] = []
     for base in cls.__bases__:
         if base is object or base is typing.Generic:
             continue
-        rendered.append(_render_base_ref(base, imports))
+        rendered.append(_render_base_ref(base, imports, cls_params))
     return ", ".join(rendered) if rendered else "object"
 
 
@@ -218,17 +225,29 @@ def _is_concrete_view(cls: Any) -> bool:
 def _get_class_type_params(cls: type) -> tuple[Any, ...]:
     """Return the type parameters of a class as a tuple of TypeVar/ParamSpec/TypeVarTuple objects.
 
-    Handles both PEP 695 classes (``__type_params__``) and old-style ``Generic[T]`` classes.
-    The ``typing.Generic in __bases__`` guard prevents picking up the ``__orig_bases__`` that
-    Pydantic's metaclass injects on concrete generic subclasses.
+    Three sources are tried in order:
+    1. PEP 695 ``__type_params__`` (new-style ``class Foo[T]: ...``).
+    2. Old-style ``Generic[T]`` in ``__orig_bases__`` when the user wrote ``Generic[T]`` explicitly
+       (guarded by ``typing.Generic in __bases__`` to avoid picking up Pydantic's internal
+       ``__orig_bases__`` injection on concrete subclasses).
+    3. Pydantic's ``__pydantic_generic_metadata__['parameters']``, which carries the *unbound*
+       TypeVars propagated from a generic base even when neither of the above is present
+       (e.g. ``class Descendent(EntityWithId[TVar])`` inherits ``TVar`` this way).
     """
     params = getattr(cls, "__type_params__", ())
-    if not params and typing.Generic in getattr(cls, "__bases__", ()):
+    if params:
+        return params
+    if typing.Generic in getattr(cls, "__bases__", ()):
         params = next(
             (get_args(b) for b in getattr(cls, "__orig_bases__", ()) if get_origin(b) is typing.Generic),
             (),
         )
-    return params
+        if params:
+            return params
+    meta = getattr(cls, "__pydantic_generic_metadata__", None)
+    if meta:
+        return meta.get("parameters", ())
+    return ()
 
 
 def _render_param_list(params: tuple[Any, ...], imports: Imports) -> str:
