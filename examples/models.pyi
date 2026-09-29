@@ -377,6 +377,18 @@ class EntityWithIdLoad[TVar: str | int = str](View[EntityWithId[TVar]]):
 
     def __init__(self, *, id: TVar) -> None: ...
 
+class Descendent[TVar: str | int = str](EntityWithId[TVar]):
+    id: TVar
+    new_field: str
+
+    def __init__(self, *, id: TVar, new_field: str) -> None: ...
+
+class DescendentLoad[TVar: str | int = str](View[Descendent[TVar]]):
+    id: TVar
+    new_field: str
+
+    def __init__(self, *, id: TVar, new_field: str) -> None: ...
+
 class ExampleTypedDict(TypedDict):
     field: str
     another_field: int
