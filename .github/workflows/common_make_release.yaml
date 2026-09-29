@@ -86,3 +86,5 @@ jobs:
     with:
       ref: ${{ github.ref_name }}
       level: 'patch'
+    secrets:
+      ACTIONS_GITHUB_TOKEN_PULL_REQUEST: ${{ secrets.ACTIONS_GITHUB_TOKEN_PULL_REQUEST }}

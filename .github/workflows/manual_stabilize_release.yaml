@@ -9,6 +9,7 @@ permissions:
 jobs:
   get-version:
     uses: ./.github/workflows/common_get_version.yaml
+    
 
   create-release-branch:
     runs-on: ubuntu-latest
@@ -20,6 +21,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           ref: main
+          repository: ${{ github.repository }}
 
       - uses: ./.github/actions/setup-repo
 

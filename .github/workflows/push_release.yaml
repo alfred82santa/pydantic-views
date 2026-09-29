@@ -18,9 +18,8 @@ jobs:
     uses: ./.github/workflows/common_get_version.yaml
 
   get-main-version:
-    uses: ./.github/workflows/common_get_version.yaml
-    with:
-      ref: main
+    uses: alfred82santa/pydantic-views/.github/workflows/common_get_version.yaml@main
+
 
   increase-version:
     needs:

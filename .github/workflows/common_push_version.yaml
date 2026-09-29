@@ -41,6 +41,7 @@ jobs:
         with:
           fetch-depth: 1
           ref: ${{ inputs.ref }}
+          repository: ${{ github.repository }}
           
       - uses: ./.github/actions/setup-repo
 
