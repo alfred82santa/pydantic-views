@@ -324,6 +324,14 @@ class EntityWithIdLoad(View[EntityWithId[TVar]], preset=LoadPreset):
     pass
 
 
+class Descendent(EntityWithId[TVar]):
+    new_field: str
+
+
+class DescendentLoad(View[Descendent[TVar]], preset=LoadPreset):
+    pass
+
+
 class ExampleTypedDict(TypedDict):
     field: str
     another_field: int
