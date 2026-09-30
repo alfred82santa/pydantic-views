@@ -80,7 +80,7 @@ jobs:
         with:
           fetch-depth: 1
           repository: ${{ github.repository }}
-          ref: ${{ job.workflow_ref }}
+          ref: ${{ job.workflow_sha }}
           
       - uses: ./.github/actions/setup-repo
 
