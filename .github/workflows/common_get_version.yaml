@@ -76,7 +76,7 @@ jobs:
       is-prerelease: ${{ steps.define-version.outputs.is-prerelease }}
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 1
           repository: ${{ github.repository }}

@@ -27,7 +27,7 @@ jobs:
 
     environment:
       name: ${{ inputs.environment }}
-      url: https://pypi.org/project/llimona-azure-openai/
+      url: https://pypi.org/project/pydantic-views/
 
     permissions:
       contents: write
@@ -40,7 +40,7 @@ jobs:
       release-ref: release/${{ steps.define-version.outputs.release-minor }}
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 1
 

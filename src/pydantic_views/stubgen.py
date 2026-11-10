@@ -14,6 +14,7 @@ The emitted stub for each module contains:
 * every view declared in the module source;
 * every view generated at runtime for a model defined in the module;
 * module-level functions.
+* module-level type aliases declared with ``type``.
 
 Usage::
 
@@ -132,6 +133,9 @@ def render_annotation(tp: Any, imports: Imports) -> str:
         return tp.__forward_arg__
     if isinstance(tp, typing.TypeVar):
         return tp.__name__
+    if isinstance(tp, typing.TypeAliasType):
+        imports.add(tp.__module__ or "", tp.__name__)
+        return tp.__name__
 
     # ``Annotated[T, ...]``: keep ``T``, drop the metadata (access modes, validators, ...).
     if hasattr(tp, "__metadata__"):
@@ -153,7 +157,10 @@ def render_annotation(tp: Any, imports: Imports) -> str:
             else:
                 rendered_params = "[" + ", ".join(render_annotation(p, imports) for p in params) + "]"
             return f"Callable[{rendered_params}, {render_annotation(ret, imports)}]"
-        base = imports.ref(origin) if isinstance(origin, type) else _render_special_form(origin, imports)
+        if isinstance(origin, typing.TypeAliasType):
+            base = render_annotation(origin, imports)
+        else:
+            base = imports.ref(origin) if isinstance(origin, type) else _render_special_form(origin, imports)
         if args:
             return f"{base}[{', '.join(render_annotation(a, imports) for a in args)}]"
         return base
@@ -602,7 +609,12 @@ def render_module(module: types.ModuleType) -> str:
     # parametrized generics (e.g. ``View[Any]``) as module attributes whose ``__name__`` is not a
     # valid identifier; those are implementation details and must be skipped.
     for name, obj in vars(module).items():
-        if isinstance(obj, type) and obj.__module__ == module.__name__ and obj.__name__.isidentifier():
+        if isinstance(obj, typing.TypeAliasType) and obj.__module__ == module.__name__:
+            params = _render_type_params(obj, imports)
+            value = render_annotation(obj.__value__, imports)
+            blocks.append(f"type {name}{params} = {value}")
+            emitted_names.add(name)
+        elif isinstance(obj, type) and obj.__module__ == module.__name__ and obj.__name__.isidentifier():
             blocks.append(_render_class(obj, imports))
             emitted_names.add(obj.__name__)
         # Use the attribute name, not ``obj.__name__``: a module-level lambda is bound to a real

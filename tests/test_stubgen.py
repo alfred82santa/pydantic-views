@@ -737,6 +737,46 @@ def test_generate_writes_parsable_stub(tmp_path: Path) -> None:
     _parse(path.read_text())
 
 
+def test_generate_preserves_example_type_alias(tmp_path: Path) -> None:
+    import examples.models as module
+
+    path = generate(module, tmp_path)
+    tree = _parse(path.read_text())
+    aliases = [node for node in tree.body if isinstance(node, ast.TypeAlias)]
+    alias = next(node for node in aliases if node.name.id == "ModelTypes")
+    assert ast.unparse(alias.value) == "Address | User | Role"
+    assert not alias.type_params
+
+
+def test_render_module_preserves_generic_and_recursive_aliases() -> None:
+    module = types.ModuleType("alias_models")
+    exec(
+        "from datetime import datetime\n"
+        "type Items[T: int = int] = list[T]\n"
+        "type Tree = int | list[Tree]\n"
+        "type Timestamp = datetime\n"
+        "def process(items: Items[int], tree: Tree) -> Timestamp: ...\n",
+        module.__dict__,
+    )
+
+    stub = render_module(module)
+    tree = _parse(stub)
+    aliases = {node.name.id: node for node in tree.body if isinstance(node, ast.TypeAlias)}
+    assert ast.unparse(aliases["Items"]) == "type Items[T: int = int] = list[T]"
+    assert ast.unparse(aliases["Tree"].value) == "int | list[Tree]"
+    assert ast.unparse(aliases["Timestamp"].value) == "datetime"
+    assert "from datetime import datetime" in stub
+    assert "def process(items: Items[int], tree: Tree) -> Timestamp: ..." in stub
+
+
+def test_render_annotation_imported_type_alias() -> None:
+    import examples.models as module
+
+    imports = Imports("consumer")
+    assert render_annotation(module.ModelTypes, imports) == "ModelTypes"
+    assert imports.render_block() == "from examples.models import ModelTypes"
+
+
 def test_generate_whole_package_parses(tmp_path: Path) -> None:
     modules = list(load_modules("pydantic_views"))
     path = generate(modules[0], tmp_path)

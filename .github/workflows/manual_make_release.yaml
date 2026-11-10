@@ -37,7 +37,7 @@ jobs:
         run: |
           echo "# :boom::fire: Production releases must be made from a release branch. Please create a branch named release/x.y from main and push it before running this workflow. :fire::boom:" >> $GITHUB_STEP_SUMMARY
           exit 1
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 1
       - uses: ./.github/actions/publishing

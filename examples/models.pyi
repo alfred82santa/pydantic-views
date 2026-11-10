@@ -16,6 +16,8 @@ var_int: int
 var_str: str
 TVar: TypeVar
 
+type ModelTypes = Address | User | Role
+
 class AddressType(StrEnum):
     HOME = "home"
     WORK = "work"
