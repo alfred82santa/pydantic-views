@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import sys
 from collections.abc import Iterable, Mapping
 from functools import reduce
@@ -21,7 +23,7 @@ from .annotations import AccessMode, AccessTag
 from .manager import Manager
 from .view import View
 
-if TYPE_CHECKING or sys.version_info < (3, 14):
+if TYPE_CHECKING:
     try:
         from typing import TypeForm  # type: ignore
     except ImportError:
