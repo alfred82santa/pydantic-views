@@ -30,7 +30,15 @@ def with_preset[F: Callable[..., Any]](new: F) -> F:
     """
 
     @wraps(new)
-    def wrapper(cls, name, bases, namespace, *, preset: "Preset | None" = None, **kwargs):
+    def wrapper(
+        cls: type,
+        name: str,
+        bases: tuple[type[Any], ...],
+        namespace: dict[str, Any],
+        *,
+        preset: "Preset | None" = None,
+        **kwargs: Any,
+    ):
         if preset is not None:
             for field, value in preset._asdict().items():
                 kwargs.setdefault(field, value)
@@ -45,9 +53,9 @@ class ViewMetaClass(ModelMetaclass):
     @with_preset
     def __new__(
         cls,
-        name,
-        bases,
-        namespace,
+        name: str,
+        bases: tuple[type[Any], ...],
+        namespace: dict[str, Any],
         *,
         view_name: str | None = None,
         access_modes: Iterable[AccessMode] | None = None,
@@ -58,9 +66,14 @@ class ViewMetaClass(ModelMetaclass):
         hide_default_null: bool = False,
         include_computed_fields: bool = False,
         no_process: bool = False,
-        **kwargs,
+        **kwargs: Any,
     ):
         if ABC in bases or namespace.get("__module__") == "pydantic_views.view":
+            return super().__new__(cls, name, bases, namespace, **kwargs)
+
+        from .view import View
+
+        if View in bases:
             return super().__new__(cls, name, bases, namespace, **kwargs)
 
         from .builder import ensure_model_views

@@ -42,8 +42,11 @@ from pydantic_views import (
 
 def get_user_display_name(user: User) -> str:
     """A function that uses the generated views, to demonstrate that they are fully usable."""
-    user_load = UserLoad.model_validate(user)
+    user_load: UserLoad = UserLoad.model_validate(user)
     return user_load.display_name
+
+
+type ModelTypes = Address | User | Role
 
 
 class AddressType(StrEnum):
