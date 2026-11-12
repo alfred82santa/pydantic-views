@@ -21,7 +21,7 @@ from .annotations import AccessMode, AccessTag
 from .manager import Manager
 from .view import View
 
-if TYPE_CHECKING:
+if TYPE_CHECKING or sys.version_info < (3, 14):
     try:
         from typing import TypeForm  # type: ignore
     except ImportError:
