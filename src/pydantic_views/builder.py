@@ -3,7 +3,7 @@ from collections.abc import Iterable, Mapping
 from functools import reduce
 from types import NoneType, UnionType
 from typing import (
-    Annotated,
+    TYPE_CHECKING,
     Any,
     ForwardRef,
     Literal,
@@ -20,6 +20,12 @@ from pydantic_core import MISSING, PydanticUndefined
 from .annotations import AccessMode, AccessTag
 from .manager import Manager
 from .view import View
+
+if TYPE_CHECKING:
+    try:
+        from typing import TypeForm  # type: ignore
+    except ImportError:
+        from typing_extensions import TypeForm
 
 
 class Builder:
@@ -79,7 +85,9 @@ class Builder:
 
         return result
 
-    def get_view_ref[T: BaseModel](self, model: type[T]) -> type[View[T] | T] | ForwardRef:
+    def get_view_ref[T: BaseModel](
+        self, model: type[T]
+    ) -> type[View[T] | T] | ForwardRef:
         """
         Return the view class or a forward reference for the model.
 
@@ -106,10 +114,16 @@ class Builder:
         am = {m for m in f_info.metadata if isinstance(m, AccessMode)}
         tags = {t for t in f_info.metadata if isinstance(t, AccessTag)}
 
-        if (self.access_modes is not None and len(am & set(self.access_modes)) > 0) or len(am) == 0:
-            return self.exclude_tags is not None and len(tags & set(self.exclude_tags)) > 0
+        if (
+            self.access_modes is not None and len(am & set(self.access_modes)) > 0
+        ) or len(am) == 0:
+            return (
+                self.exclude_tags is not None and len(tags & set(self.exclude_tags)) > 0
+            )
 
-        return not (self.include_tags is not None and len(tags & set(self.include_tags)) > 0)
+        return not (
+            self.include_tags is not None and len(tags & set(self.include_tags)) > 0
+        )
 
     def _iter_fields[T: BaseModel](self, model: type[T]):
         for f_name, f_info in model.model_fields.items():
@@ -122,18 +136,22 @@ class Builder:
 
     def _iter_computed_fields[T: BaseModel](self, model: type[T]):
         for f_name, cf_info in model.model_computed_fields.items():
-            if self._filter_computed_field(cf_info):  # [TODO] does it have sense? #  pragma: no cover
+            if self._filter_computed_field(
+                cf_info
+            ):  # [TODO] does it have sense? #  pragma: no cover
                 continue
             yield f_name, cf_info
 
-    def define_fields_from_model[T: BaseModel](self, model: type[T]) -> dict[str, tuple[type[Any] | None, FieldInfo]]:
+    def define_fields_from_model[T: BaseModel](
+        self, model: type[T]
+    ) -> dict[str, tuple[TypeForm[Any] | None, FieldInfo]]:
         """
         Define fields for the view based on the provided model.
 
         :param model: Model class to derive the view from.
         :returns: Dictionary of field names and their corresponding types and FieldInfo.
         """
-        model_fields: dict[str, tuple[type[Any] | None, FieldInfo]] = {}
+        model_fields: dict[str, tuple[TypeForm[Any] | None, FieldInfo]] = {}
         for f_name, f_info in self._iter_fields(model):
             model_fields[f_name] = self._map_field_info(
                 f_info,
@@ -178,8 +196,12 @@ class Builder:
 
             params: dict[str, Any] = {
                 "__module__": model.__module__,
-                "__base__": (RootView[model] if issubclass(model, RootModel) else View[model]),
-                "__doc__": (f"View `{self.view_name}` of model :class:`~{model.__module__}.{model.__qualname__}`"),
+                "__base__": (
+                    RootView[model] if issubclass(model, RootModel) else View[model]
+                ),
+                "__doc__": (
+                    f"View `{self.view_name}` of model :class:`~{model.__module__}.{model.__qualname__}`"
+                ),
                 "__cls_kwargs__": {"view_name": self.view_name, "no_process": True},
                 **model_fields,
             }
@@ -202,11 +224,15 @@ class Builder:
         f_info: FieldInfo,
         *,
         ignore_nullable: bool = False,
-    ) -> tuple[type[Any] | None, FieldInfo]:
+    ) -> tuple[TypeForm[Any] | None, FieldInfo]:
         f_info = FieldInfo.merge_field_infos(
             f_info,
-            annotation=self._map_annotation(f_info.annotation, ignore_nullable=ignore_nullable),
-            metadata=[m for m in f_info.metadata if not isinstance(m, (AccessMode, AccessTag))],
+            annotation=self._map_annotation(
+                f_info.annotation, ignore_nullable=ignore_nullable
+            ),
+            metadata=[
+                m for m in f_info.metadata if not isinstance(m, (AccessMode, AccessTag))
+            ],
         )
 
         if self.all_optional:
@@ -226,27 +252,31 @@ class Builder:
         return f_info.annotation, f_info
 
     def _map_annotation(
-        self, annotation: type[Any] | None, *, ignore_nullable: bool = False
-    ) -> type[Any] | ForwardRef | None | UnionType:
-        def finish_annotation(a: type[Any] | None) -> type[Any] | None | UnionType:
+        self, annotation: TypeForm[Any] | None, *, ignore_nullable: bool = False
+    ) -> TypeForm[Any] | ForwardRef | None | UnionType:
+        def finish_annotation(
+            a: TypeForm[Any] | None,
+        ) -> TypeForm[Any] | None | UnionType:
             if not ignore_nullable and self.all_nullable and a is not Ellipsis:  # type: ignore
                 return a | None  # type: ignore
 
             return a
 
         try:
-            if annotation and issubclass(annotation, BaseModel):
+            if annotation and issubclass(annotation, BaseModel):  # type: ignore
                 return finish_annotation(self.get_view_ref(annotation))  # type: ignore
         except TypeError:
             pass
 
-        origin: type | Annotated = get_origin(annotation)
+        origin: TypeForm[Any] | None = get_origin(annotation)
         type_args = get_args(annotation)
 
         if origin is None:
             return finish_annotation(annotation)
 
-        if origin is not UnionType and not (isinstance(origin, type) and issubclass(origin, UnionType)):
+        if origin is not UnionType and not (
+            isinstance(origin, type) and issubclass(origin, UnionType)
+        ):
             if origin is Literal:
                 return origin[*(self._map_annotation(t, ignore_nullable=True) for t in type_args)]  # type: ignore
 
@@ -262,7 +292,9 @@ class Builder:
                     return finish_annotation(
                         origin[  # type: ignore
                             *(
-                                self._map_annotation(t, ignore_nullable=issubclass(origin, (list, set)))
+                                self._map_annotation(
+                                    t, ignore_nullable=issubclass(origin, (list, set))
+                                )
                                 for t in type_args
                             )
                         ]
@@ -276,7 +308,9 @@ class Builder:
             [a for a in type_args if a is not NoneType or not self.hide_default_null],
         )
 
-    def _map_computed_field_info(self, cf_info: ComputedFieldInfo) -> tuple[type[Any] | None, FieldInfo]:
+    def _map_computed_field_info(
+        self, cf_info: ComputedFieldInfo
+    ) -> tuple[type | None, FieldInfo]:
         return (
             cf_info.return_type,
             FieldInfo(
