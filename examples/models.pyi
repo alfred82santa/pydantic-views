@@ -6,6 +6,7 @@ from enum import StrEnum
 from typing import Generic, Literal, Self, TypedDict, TypeVar
 
 from pydantic import BaseModel
+from pydantic_core import MISSING
 
 from pydantic_views import View
 from pydantic_views.builder import Preset
@@ -81,19 +82,28 @@ class AddressLoad(View[Address]):
 
     def __init__(self, *, type: AddressType, street: str, number: int, zip_code: str) -> None: ...
 
+class AddressPartial(View[Address]):
+    type: AddressType | MISSING
+    street: str | MISSING
+    number: int | MISSING
+
+    def __init__(
+        self, *, type: AddressType | MISSING = ..., street: str | MISSING = ..., number: int | MISSING = ...
+    ) -> None: ...
+
 class AddressPatch(View[Address]):
-    type: AddressType | None
-    street: str | None
-    number: int | None
-    notes: str | None
+    type: AddressType | None | MISSING
+    street: str | None | MISSING
+    number: int | None | MISSING
+    notes: str | None | MISSING
 
     def __init__(
         self,
         *,
-        type: AddressType | None = ...,
-        street: str | None = ...,
-        number: int | None = ...,
-        notes: str | None = ...,
+        type: AddressType | None | MISSING = ...,
+        street: str | None | MISSING = ...,
+        number: int | None | MISSING = ...,
+        notes: str | None | MISSING = ...,
     ) -> None: ...
 
 class AddressSignup(View[Address]):
@@ -116,13 +126,18 @@ class AddressType(StrEnum):
     def __str__(self) -> str: ...
 
 class AddressUpdate(View[Address]):
-    type: AddressType
-    street: str
-    number: int
-    notes: str | None
+    type: AddressType | MISSING
+    street: str | MISSING
+    number: int | MISSING
+    notes: str | None | MISSING
 
     def __init__(
-        self, *, type: AddressType = ..., street: str = ..., number: int = ..., notes: str | None = ...
+        self,
+        *,
+        type: AddressType | MISSING = ...,
+        street: str | MISSING = ...,
+        number: int | MISSING = ...,
+        notes: str | None | MISSING = ...,
     ) -> None: ...
 
 class Descendent[TVar: str | int = str](EntityWithId[TVar]):
@@ -209,11 +224,17 @@ class RoleLoad(View[Role]):
 
     def __init__(self, *, type: Role.RoleType, name: str, level: int) -> None: ...
 
-class RolePatch(View[Role]):
-    type: Role.RoleType | None
-    name: str | None
+class RolePartial(View[Role]):
+    type: Role.RoleType | MISSING
+    name: str | MISSING
 
-    def __init__(self, *, type: Role.RoleType | None = ..., name: str | None = ...) -> None: ...
+    def __init__(self, *, type: Role.RoleType | MISSING = ..., name: str | MISSING = ...) -> None: ...
+
+class RolePatch(View[Role]):
+    type: Role.RoleType | None | MISSING
+    name: str | None | MISSING
+
+    def __init__(self, *, type: Role.RoleType | None | MISSING = ..., name: str | None | MISSING = ...) -> None: ...
 
 class RoleSignup(View[Role]):
     type: Role.RoleType
@@ -222,10 +243,10 @@ class RoleSignup(View[Role]):
     def __init__(self, *, type: Role.RoleType, name: str) -> None: ...
 
 class RoleUpdate(View[Role]):
-    type: Role.RoleType
-    name: str
+    type: Role.RoleType | MISSING
+    name: str | MISSING
 
-    def __init__(self, *, type: Role.RoleType = ..., name: str = ...) -> None: ...
+    def __init__(self, *, type: Role.RoleType | MISSING = ..., name: str | MISSING = ...) -> None: ...
 
 class User(BaseModel):
     name: str
@@ -341,23 +362,40 @@ class UserLoad(View[User]):
         display_name: str = ...,
     ) -> None: ...
 
-class UserPatch(View[User]):
-    name: str | None
-    kind: Literal["person", "bot"]
-    password: str | None
-    primary_address: AddressPatch | None
-    addresses: list[AddressPatch] | None
-    roles: dict[str, RolePatch | None] | None
+class UserPartial(View[User]):
+    name: str | MISSING
+    kind: Literal["person", "bot"] | MISSING
+    primary_address: AddressPartial | MISSING
+    addresses: list[AddressPartial] | MISSING
+    roles: dict[str, RolePartial] | MISSING
 
     def __init__(
         self,
         *,
-        name: str | None = ...,
-        kind: Literal["person", "bot"] = ...,
-        password: str | None = ...,
-        primary_address: AddressPatch | None = ...,
-        addresses: list[AddressPatch] | None = ...,
-        roles: dict[str, RolePatch | None] | None = ...,
+        name: str | MISSING = ...,
+        kind: Literal["person", "bot"] | MISSING = ...,
+        primary_address: AddressPartial | MISSING = ...,
+        addresses: list[AddressPartial] | MISSING = ...,
+        roles: dict[str, RolePartial] | MISSING = ...,
+    ) -> None: ...
+
+class UserPatch(View[User]):
+    name: str | None | MISSING
+    kind: Literal["person", "bot"] | MISSING
+    password: str | None | MISSING
+    primary_address: AddressPatch | None | MISSING
+    addresses: list[AddressPatch] | None | MISSING
+    roles: dict[str, RolePatch | None] | None | MISSING
+
+    def __init__(
+        self,
+        *,
+        name: str | None | MISSING = ...,
+        kind: Literal["person", "bot"] | MISSING = ...,
+        password: str | None | MISSING = ...,
+        primary_address: AddressPatch | None | MISSING = ...,
+        addresses: list[AddressPatch] | None | MISSING = ...,
+        roles: dict[str, RolePatch | None] | None | MISSING = ...,
     ) -> None: ...
 
 class UserSignup(View[User]):
@@ -388,22 +426,22 @@ class UserSignup(View[User]):
     ) -> None: ...
 
 class UserUpdate(View[User]):
-    name: str
-    kind: Literal["person", "bot"]
-    password: str
-    primary_address: AddressUpdate
-    addresses: list[AddressUpdate]
-    roles: dict[str, RoleUpdate]
+    name: str | MISSING
+    kind: Literal["person", "bot"] | MISSING
+    password: str | MISSING
+    primary_address: AddressUpdate | MISSING
+    addresses: list[AddressUpdate] | MISSING
+    roles: dict[str, RoleUpdate] | MISSING
 
     def __init__(
         self,
         *,
-        name: str = ...,
-        kind: Literal["person", "bot"] = ...,
-        password: str = ...,
-        primary_address: AddressUpdate = ...,
-        addresses: list[AddressUpdate] = ...,
-        roles: dict[str, RoleUpdate] = ...,
+        name: str | MISSING = ...,
+        kind: Literal["person", "bot"] | MISSING = ...,
+        password: str | MISSING = ...,
+        primary_address: AddressUpdate | MISSING = ...,
+        addresses: list[AddressUpdate] | MISSING = ...,
+        roles: dict[str, RoleUpdate] | MISSING = ...,
     ) -> None: ...
 
 def get_user_display_name(user: User) -> str: ...

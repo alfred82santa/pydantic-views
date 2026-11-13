@@ -365,3 +365,7 @@ def widen_user_result_load(result: ModelResultLoad[User]) -> ModelResultLoad[Bas
 class ExampleTypedDict(TypedDict):
     field: str
     another_field: int
+
+
+class UserPartial(View[User], view_name="Partial", all_optional=True):
+    pass

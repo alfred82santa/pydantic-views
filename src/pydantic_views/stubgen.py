@@ -43,6 +43,7 @@ from pathlib import Path
 from typing import Any, Self, get_args, get_origin
 
 from pydantic import BaseModel
+from pydantic_core import MISSING
 
 from .view import RootView, View
 
@@ -118,6 +119,9 @@ class Imports:
 
 def render_annotation(tp: Any, imports: Imports) -> str:
     """Render a runtime annotation object as stub-ready source text."""
+    if tp is MISSING:
+        imports.add("pydantic_core", "MISSING")
+        return "MISSING"
     if tp is None or tp is type(None):
         return "None"
     if tp is Ellipsis:
