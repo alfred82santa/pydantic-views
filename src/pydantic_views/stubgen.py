@@ -608,7 +608,7 @@ def render_module(module: types.ModuleType) -> str:
     # module attributes (the builder calls ``setattr`` on the module). Pydantic registers
     # parametrized generics (e.g. ``View[Any]``) as module attributes whose ``__name__`` is not a
     # valid identifier; those are implementation details and must be skipped.
-    for name, obj in vars(module).items():
+    for name, obj in inspect.getmembers_static(module):
         if isinstance(obj, typing.TypeAliasType) and obj.__module__ == module.__name__:
             params = _render_type_params(obj, imports)
             value = render_annotation(obj.__value__, imports)
