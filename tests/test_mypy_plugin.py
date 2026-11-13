@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -50,6 +51,39 @@ def test_expected_errors_all_fire():
     # warn_unused_ignores=true means a missing plugin error becomes an "unused ignore" failure.
     result = _run_mypy(str(DATA_MYPI / "check_errors.py"))
     assert "Success" in result.stdout, result.stdout + result.stderr
+
+
+def test_generated_stubs_type_check_without_transforming_views(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    from pydantic_views.stubgen import generate
+
+    source = (
+        "from pydantic import BaseModel\n"
+        "from pydantic_views import View, LoadPreset, WriteOnly\n"
+        "class Metadata(BaseModel):\n"
+        "    name: str\n"
+        "    secret: WriteOnly[str]\n"
+        "class MetadataLoad(View[Metadata], preset=LoadPreset):\n"
+        "    pass\n"
+    )
+    path = tmp_path / "stub_plugin_models.py"
+    path.write_text(source)
+    module = types.ModuleType("stub_plugin_models")
+    module.__file__ = str(path)
+    monkeypatch.setitem(sys.modules, module.__name__, module)
+    exec(compile(source, str(path), "exec"), module.__dict__)
+    stub_path = generate(module)
+    consumer = tmp_path / "consumer.py"
+    consumer.write_text(
+        "from stub_plugin_models import MetadataLoad\n"
+        "view = MetadataLoad(name='example')\n"
+        "MetadataLoad()  # type: ignore[call-arg]\n"
+        "MetadataLoad(name=123)  # type: ignore[arg-type]\n"
+        "MetadataLoad(name='example', secret='hidden')  # type: ignore[call-arg]\n"
+        "view.secret  # type: ignore[attr-defined]\n"
+    )
+
+    result = _run_mypy(str(stub_path), str(consumer))
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_plugin_field_sets_match_runtime_builder():

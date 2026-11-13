@@ -29,7 +29,7 @@ Documentation = "https://pydantic-views.readthedocs.io/stable/"
 Issues = "https://github.com/alfred82santa/pydantic-views/issues"
 
 [build-system]
-requires = ["uv_build>=0.9.26,<0.12.0"]
+requires = ["uv_build>=0.9.26,<0.14.0"]
 build-backend = "uv_build"
 
 [tool.ruff]

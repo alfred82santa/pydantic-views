@@ -3,31 +3,40 @@
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Literal, Self, TypedDict, TypeVar
+from typing import Generic, Literal, Self, TypedDict, TypeVar
 
 from pydantic import BaseModel
 
 from pydantic_views import View
 from pydantic_views.builder import Preset
 
+TModelCo = TypeVar("TModelCo", bound=BaseModel, default=User, covariant=True)
 InternalCreatePreset: Preset
 InternalUpdatePreset: Preset
 var_int: int
 var_str: str
 TVar: TypeVar
 
-type ModelTypes = Address | User | Role
+class Account(BaseModel):
+    id: int
+    username: str
+    password: str
 
-class AddressType(StrEnum):
-    HOME = "home"
-    WORK = "work"
-    OTHER = "other"
+    def __init__(self, *, id: int, username: str, password: str) -> None: ...
 
-    @classmethod
-    def from_string(cls, type_str: str) -> AddressType: ...
-    @staticmethod
-    def is_valid_type(type_str: str) -> bool: ...
-    def __str__(self) -> str: ...
+class AccountCreate(View[Account]):
+    accept_terms: bool
+    captcha: str | None
+    username: str
+    password: str
+
+    def __init__(self, *, accept_terms: bool, captcha: str | None = ..., username: str, password: str) -> None: ...
+
+class AccountLoad(View[Account]):
+    id: int
+    username: str
+
+    def __init__(self, *, id: int, username: str) -> None: ...
 
 class Address(BaseModel):
     type: AddressType
@@ -48,6 +57,126 @@ class Address(BaseModel):
     @staticmethod
     def is_valid_zip(zip_code: str) -> bool: ...
 
+class AddressCreate(View[Address]):
+    type: AddressType
+    street: str
+    number: int
+    notes: str
+
+    def __init__(self, *, type: AddressType, street: str, number: int, notes: str = ...) -> None: ...
+
+class AddressCreateResult(View[Address]):
+    type: AddressType
+    street: str
+    number: int
+    zip_code: str
+
+    def __init__(self, *, type: AddressType, street: str, number: int, zip_code: str) -> None: ...
+
+class AddressLoad(View[Address]):
+    type: AddressType
+    street: str
+    number: int
+    zip_code: str
+
+    def __init__(self, *, type: AddressType, street: str, number: int, zip_code: str) -> None: ...
+
+class AddressPatch(View[Address]):
+    type: AddressType | None
+    street: str | None
+    number: int | None
+    notes: str | None
+
+    def __init__(
+        self,
+        *,
+        type: AddressType | None = ...,
+        street: str | None = ...,
+        number: int | None = ...,
+        notes: str | None = ...,
+    ) -> None: ...
+
+class AddressSignup(View[Address]):
+    type: AddressType
+    street: str
+    number: int
+    notes: str
+
+    def __init__(self, *, type: AddressType, street: str, number: int, notes: str = ...) -> None: ...
+
+class AddressType(StrEnum):
+    HOME = "home"
+    WORK = "work"
+    OTHER = "other"
+
+    @classmethod
+    def from_string(cls, type_str: str) -> AddressType: ...
+    @staticmethod
+    def is_valid_type(type_str: str) -> bool: ...
+    def __str__(self) -> str: ...
+
+class AddressUpdate(View[Address]):
+    type: AddressType
+    street: str
+    number: int
+    notes: str | None
+
+    def __init__(
+        self, *, type: AddressType = ..., street: str = ..., number: int = ..., notes: str | None = ...
+    ) -> None: ...
+
+class Descendent[TVar: str | int = str](EntityWithId[TVar]):
+    id: TVar
+    new_field: str
+
+    def __init__(self, *, id: TVar, new_field: str) -> None: ...
+
+class DescendentLoad[TVar: str | int = str](View[Descendent[TVar]]):
+    id: TVar
+    new_field: str
+
+    def __init__(self, *, id: TVar, new_field: str) -> None: ...
+
+class EntityList[T: BaseModel](BaseModel):
+    entities: list[T]
+    count: int
+
+    def __init__(self, *, entities: list[T], count: int) -> None: ...
+
+class EntityListCreate[T: BaseModel](View[EntityList[T]]):
+    entities: list[T]
+    count: int
+
+    def __init__(self, *, entities: list[T], count: int) -> None: ...
+
+class EntityWithId[TVar: str | int = str](BaseModel):
+    id: TVar
+
+    def __init__(self, *, id: TVar) -> None: ...
+    @classmethod
+    def with_id(cls, id: TVar) -> Self: ...
+
+class EntityWithIdLoad[TVar: str | int = str](View[EntityWithId[TVar]]):
+    id: TVar
+
+    def __init__(self, *, id: TVar) -> None: ...
+
+class ExampleTypedDict(TypedDict):
+    field: str
+    another_field: int
+
+class ModelResult(BaseModel, Generic[TModelCo]):
+    result: TModelCo
+
+    def __init__(self, *, result: TModelCo) -> None: ...
+
+class ModelResultLoad(View[ModelResult[TModelCo]], Generic[TModelCo]):
+    result: TModelCo
+
+    def __init__(self, *, result: TModelCo) -> None: ...
+
+type ModelTypes = Address | User | Role
+
 class Role(BaseModel):
     class RoleType(StrEnum):
         ADMIN = "admin"
@@ -59,6 +188,44 @@ class Role(BaseModel):
     level: int
 
     def __init__(self, *, type: Role.RoleType, name: str, level: int) -> None: ...
+
+class RoleCreate(View[Role]):
+    type: Role.RoleType
+    name: str
+
+    def __init__(self, *, type: Role.RoleType, name: str) -> None: ...
+
+class RoleCreateResult(View[Role]):
+    type: Role.RoleType
+    name: str
+    level: int
+
+    def __init__(self, *, type: Role.RoleType, name: str, level: int) -> None: ...
+
+class RoleLoad(View[Role]):
+    type: Role.RoleType
+    name: str
+    level: int
+
+    def __init__(self, *, type: Role.RoleType, name: str, level: int) -> None: ...
+
+class RolePatch(View[Role]):
+    type: Role.RoleType | None
+    name: str | None
+
+    def __init__(self, *, type: Role.RoleType | None = ..., name: str | None = ...) -> None: ...
+
+class RoleSignup(View[Role]):
+    type: Role.RoleType
+    name: str
+
+    def __init__(self, *, type: Role.RoleType, name: str) -> None: ...
+
+class RoleUpdate(View[Role]):
+    type: Role.RoleType
+    name: str
+
+    def __init__(self, *, type: Role.RoleType = ..., name: str = ...) -> None: ...
 
 class User(BaseModel):
     name: str
@@ -93,20 +260,6 @@ class User(BaseModel):
     @property
     def display_name(self) -> str: ...
 
-class AddressCreate(View[Address]):
-    type: AddressType
-    street: str
-    number: int
-    notes: str
-
-    def __init__(self, *, type: AddressType, street: str, number: int, notes: str = ...) -> None: ...
-
-class RoleCreate(View[Role]):
-    type: Role.RoleType
-    name: str
-
-    def __init__(self, *, type: Role.RoleType, name: str) -> None: ...
-
 class UserCreate(View[User]):
     name: str
     kind: Literal["person", "bot"]
@@ -129,21 +282,6 @@ class UserCreate(View[User]):
         addresses: list[AddressCreate] = ...,
         roles: dict[str, RoleCreate] = ...,
     ) -> None: ...
-
-class AddressCreateResult(View[Address]):
-    type: AddressType
-    street: str
-    number: int
-    zip_code: str
-
-    def __init__(self, *, type: AddressType, street: str, number: int, zip_code: str) -> None: ...
-
-class RoleCreateResult(View[Role]):
-    type: Role.RoleType
-    name: str
-    level: int
-
-    def __init__(self, *, type: Role.RoleType, name: str, level: int) -> None: ...
 
 class UserCreateResult(View[User]):
     name: str
@@ -172,55 +310,11 @@ class UserCreateResult(View[User]):
         display_name: str = ...,
     ) -> None: ...
 
-class AddressUpdate(View[Address]):
-    type: AddressType
-    street: str
-    number: int
-    notes: str | None
+class UserList(EntityList[User]):
+    entities: list[User]
+    count: int
 
-    def __init__(
-        self, *, type: AddressType = ..., street: str = ..., number: int = ..., notes: str | None = ...
-    ) -> None: ...
-
-class RoleUpdate(View[Role]):
-    type: Role.RoleType
-    name: str
-
-    def __init__(self, *, type: Role.RoleType = ..., name: str = ...) -> None: ...
-
-class UserUpdate(View[User]):
-    name: str
-    kind: Literal["person", "bot"]
-    password: str
-    primary_address: AddressUpdate
-    addresses: list[AddressUpdate]
-    roles: dict[str, RoleUpdate]
-
-    def __init__(
-        self,
-        *,
-        name: str = ...,
-        kind: Literal["person", "bot"] = ...,
-        password: str = ...,
-        primary_address: AddressUpdate = ...,
-        addresses: list[AddressUpdate] = ...,
-        roles: dict[str, RoleUpdate] = ...,
-    ) -> None: ...
-
-class AddressLoad(View[Address]):
-    type: AddressType
-    street: str
-    number: int
-    zip_code: str
-
-    def __init__(self, *, type: AddressType, street: str, number: int, zip_code: str) -> None: ...
-
-class RoleLoad(View[Role]):
-    type: Role.RoleType
-    name: str
-    level: int
-
-    def __init__(self, *, type: Role.RoleType, name: str, level: int) -> None: ...
+    def __init__(self, *, entities: list[User], count: int) -> None: ...
 
 class UserLoad(View[User]):
     name: str
@@ -247,27 +341,6 @@ class UserLoad(View[User]):
         display_name: str = ...,
     ) -> None: ...
 
-class AddressPatch(View[Address]):
-    type: AddressType | None
-    street: str | None
-    number: int | None
-    notes: str | None
-
-    def __init__(
-        self,
-        *,
-        type: AddressType | None = ...,
-        street: str | None = ...,
-        number: int | None = ...,
-        notes: str | None = ...,
-    ) -> None: ...
-
-class RolePatch(View[Role]):
-    type: Role.RoleType | None
-    name: str | None
-
-    def __init__(self, *, type: Role.RoleType | None = ..., name: str | None = ...) -> None: ...
-
 class UserPatch(View[User]):
     name: str | None
     kind: Literal["person", "bot"]
@@ -286,20 +359,6 @@ class UserPatch(View[User]):
         addresses: list[AddressPatch] | None = ...,
         roles: dict[str, RolePatch | None] | None = ...,
     ) -> None: ...
-
-class AddressSignup(View[Address]):
-    type: AddressType
-    street: str
-    number: int
-    notes: str
-
-    def __init__(self, *, type: AddressType, street: str, number: int, notes: str = ...) -> None: ...
-
-class RoleSignup(View[Role]):
-    type: Role.RoleType
-    name: str
-
-    def __init__(self, *, type: Role.RoleType, name: str) -> None: ...
 
 class UserSignup(View[User]):
     accept_terms: bool
@@ -328,71 +387,25 @@ class UserSignup(View[User]):
         roles: dict[str, RoleSignup] = ...,
     ) -> None: ...
 
-class Account(BaseModel):
-    id: int
-    username: str
+class UserUpdate(View[User]):
+    name: str
+    kind: Literal["person", "bot"]
     password: str
+    primary_address: AddressUpdate
+    addresses: list[AddressUpdate]
+    roles: dict[str, RoleUpdate]
 
-    def __init__(self, *, id: int, username: str, password: str) -> None: ...
-
-class AccountCreate(View[Account]):
-    accept_terms: bool
-    captcha: str | None
-    username: str
-    password: str
-
-    def __init__(self, *, accept_terms: bool, captcha: str | None = ..., username: str, password: str) -> None: ...
-
-class AccountLoad(View[Account]):
-    id: int
-    username: str
-
-    def __init__(self, *, id: int, username: str) -> None: ...
-
-class EntityList[T: BaseModel](BaseModel):
-    entities: list[T]
-    count: int
-
-    def __init__(self, *, entities: list[T], count: int) -> None: ...
-
-class UserList(EntityList[User]):
-    entities: list[User]
-    count: int
-
-    def __init__(self, *, entities: list[User], count: int) -> None: ...
-
-class EntityListCreate[T: BaseModel](View[EntityList[T]]):
-    entities: list[T]
-    count: int
-
-    def __init__(self, *, entities: list[T], count: int) -> None: ...
-
-class EntityWithId[TVar: str | int = str](BaseModel):
-    id: TVar
-
-    def __init__(self, *, id: TVar) -> None: ...
-    @classmethod
-    def with_id(cls, id: TVar) -> Self: ...
-
-class EntityWithIdLoad[TVar: str | int = str](View[EntityWithId[TVar]]):
-    id: TVar
-
-    def __init__(self, *, id: TVar) -> None: ...
-
-class Descendent[TVar: str | int = str](EntityWithId[TVar]):
-    id: TVar
-    new_field: str
-
-    def __init__(self, *, id: TVar, new_field: str) -> None: ...
-
-class DescendentLoad[TVar: str | int = str](View[Descendent[TVar]]):
-    id: TVar
-    new_field: str
-
-    def __init__(self, *, id: TVar, new_field: str) -> None: ...
-
-class ExampleTypedDict(TypedDict):
-    field: str
-    another_field: int
+    def __init__(
+        self,
+        *,
+        name: str = ...,
+        kind: Literal["person", "bot"] = ...,
+        password: str = ...,
+        primary_address: AddressUpdate = ...,
+        addresses: list[AddressUpdate] = ...,
+        roles: dict[str, RoleUpdate] = ...,
+    ) -> None: ...
 
 def get_user_display_name(user: User) -> str: ...
+def widen_user_result(result: ModelResult[User]) -> ModelResult[BaseModel]: ...
+def widen_user_result_load(result: ModelResultLoad[User]) -> ModelResultLoad[BaseModel]: ...
