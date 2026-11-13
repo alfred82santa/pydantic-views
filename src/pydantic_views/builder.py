@@ -57,9 +57,9 @@ class Builder:
         :param include_computed_fields: Whether computed fields should be included in generated views.
         """
         self.view_name = view_name
-        self.access_modes = set(access_modes) if access_modes is not None else set()
-        self.include_tags = set(include_tags) if include_tags is not None else set()
-        self.exclude_tags = set(exclude_tags) if exclude_tags is not None else set()
+        self.access_modes: set[AccessMode] = set(access_modes) if access_modes is not None else set()
+        self.include_tags: set[AccessTag] = set(include_tags) if include_tags is not None else set()
+        self.exclude_tags: set[AccessTag] = set(exclude_tags) if exclude_tags is not None else set()
         self.all_optional = all_optional
         self.all_nullable = all_nullable
         self.hide_default_null = hide_default_null
@@ -111,13 +111,13 @@ class Builder:
         return view
 
     def _filter_field(self, f_info: FieldInfo):
-        am = {m for m in f_info.metadata if isinstance(m, AccessMode)}
-        tags = {t for t in f_info.metadata if isinstance(t, AccessTag)}
+        am: set[AccessMode] = {m for m in f_info.metadata if isinstance(m, AccessMode)}
+        tags: set[AccessTag] = {t for t in f_info.metadata if isinstance(t, AccessTag)}
 
-        if (self.access_modes is not None and len(am & set(self.access_modes)) > 0) or len(am) == 0:
-            return self.exclude_tags is not None and len(tags & set(self.exclude_tags)) > 0
+        if (len(am & self.access_modes) > 0) or len(am) == 0:
+            return len(tags & set(self.exclude_tags)) > 0
 
-        return not (self.include_tags is not None and len(tags & set(self.include_tags)) > 0)
+        return len(tags & set(self.include_tags)) == 0
 
     def _iter_fields[T: BaseModel](self, model: type[T]):
         for f_name, f_info in model.model_fields.items():
@@ -188,7 +188,9 @@ class Builder:
 
             params: dict[str, Any] = {
                 "__module__": model.__module__,
-                "__base__": (RootView[model] if issubclass(model, RootModel) else View[model]),
+                "__base__": (
+                    RootView[model] if issubclass(model, RootModel) else View[model]  # pyright: ignore[reportMissingTypeArgument]
+                ),
                 "__doc__": (f"View `{self.view_name}` of model :class:`~{model.__module__}.{model.__qualname__}`"),
                 "__cls_kwargs__": {"view_name": self.view_name, "no_process": True},
                 **model_fields,
@@ -220,11 +222,8 @@ class Builder:
         )
 
         if self.all_optional:
-            f_info = FieldInfo.merge_field_infos(
-                f_info,
-                default_factory=lambda: MISSING,
-            )
-            f_info.default = PydanticUndefined
+            f_info = FieldInfo.merge_field_infos(f_info, default_factory=None, annotation=f_info.annotation | MISSING)
+            f_info.default = MISSING
 
         if self.hide_default_null and f_info.default is None:
             f_info = FieldInfo.merge_field_infos(
@@ -236,15 +235,18 @@ class Builder:
         return f_info.annotation, f_info
 
     def _map_annotation(
-        self, annotation: TypeForm[Any] | None, *, ignore_nullable: bool = False
+        self,
+        annotation: TypeForm[Any] | None,
+        *,
+        ignore_nullable: bool = False,  # pyright: ignore[reportUnknownParameterType]
     ) -> TypeForm[Any] | ForwardRef | None | UnionType:
         def finish_annotation(
-            a: TypeForm[Any] | None,
+            a: TypeForm[Any],  # pyright: ignore[reportUnknownParameterType]
         ) -> TypeForm[Any] | None | UnionType:
             if not ignore_nullable and self.all_nullable and a is not Ellipsis:  # type: ignore
                 return a | None  # type: ignore
 
-            return a
+            return a  # pyright: ignore[reportUnknownVariableType]
 
         try:
             if annotation and issubclass(annotation, BaseModel):  # type: ignore

@@ -15,6 +15,7 @@ from typing import Any, ClassVar, Literal, TypedDict
 
 import pytest
 from pydantic import BaseModel, RootModel, computed_field
+from pydantic_core import MISSING
 
 from pydantic_views import AccessMode, Builder, ReadOnly, RootView, View, WriteOnly
 from pydantic_views import stubgen as stubgen_module
@@ -207,6 +208,31 @@ def test_render_annotation_self(imports: Imports) -> None:
 
     assert render_annotation(Self, imports) == "Self"
     assert "from typing import Self" in imports.render_block()
+
+
+@pytest.mark.parametrize(
+    ("annotation", "expected"),
+    [
+        (MISSING, "MISSING"),
+        (str | MISSING, "str | MISSING"),
+        (int | None | MISSING, "int | None | MISSING"),
+        (list[str | MISSING], "list[str | MISSING]"),
+    ],
+)
+def test_render_annotation_missing_sentinel(annotation: Any, expected: str, imports: Imports) -> None:
+    assert render_annotation(annotation, imports) == expected
+    assert "from pydantic_core import MISSING" in imports.render_block()
+
+
+def test_render_model_preserves_missing_sentinel(imports: Imports) -> None:
+    class Patch(BaseModel):
+        value: int | MISSING = MISSING
+
+    stub = stubgen_module._render_model(Patch, imports)
+    assert "value: int | MISSING" in stub
+    assert "def __init__(self, *, value: int | MISSING = ...) -> None: ..." in stub
+    assert "from pydantic_core import MISSING" in imports.render_block()
+    _parse(imports.render_block() + "\n\n" + stub)
 
 
 def test_render_annotation_string_and_forwardref(imports: Imports) -> None:

@@ -403,8 +403,7 @@ def test_view_all_optional(view_name: str, access_modes: tuple[AccessMode, ...],
     view_cls = builder.build_view(Model)
 
     for f in expected_fields:
-        assert view_cls.model_fields[f].default == PydanticUndefined
-        assert view_cls.model_fields[f].default_factory() is MISSING  # type: ignore
+        assert view_cls.model_fields[f].default is MISSING
 
 
 @pytest.mark.parametrize(
