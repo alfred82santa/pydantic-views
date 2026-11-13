@@ -241,7 +241,7 @@ class Builder:
         ignore_nullable: bool = False,  # pyright: ignore[reportUnknownParameterType]
     ) -> TypeForm[Any] | ForwardRef | None | UnionType:
         def finish_annotation(
-            a: TypeForm[Any],  # pyright: ignore[reportUnknownParameterType]
+            a: TypeForm[Any] | None,  # pyright: ignore[reportUnknownParameterType]
         ) -> TypeForm[Any] | None | UnionType:
             if not ignore_nullable and self.all_nullable and a is not Ellipsis:  # type: ignore
                 return a | None  # type: ignore
