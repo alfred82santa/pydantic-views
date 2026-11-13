@@ -170,6 +170,10 @@ class PydanticViewsPlugin(Plugin):
         return None
 
     def _view_class_callback(self, ctx: ClassDefContext) -> None:
+        # Stubs already declare their resolved fields and constructor signatures.
+        module = ctx.api.modules.get(ctx.cls.info.module_name)
+        if module is not None and module.is_stub:
+            return
         _ViewTransformer(ctx, self).transform()
 
 

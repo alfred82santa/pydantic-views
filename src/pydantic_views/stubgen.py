@@ -75,6 +75,7 @@ class Imports:
     def __init__(self, current_module: str) -> None:
         self._current_module = current_module
         self._from: dict[str, set[str]] = {}
+        self.typevars: dict[str, Any] = {}
 
     @property
     def current_module(self) -> str:
@@ -166,6 +167,12 @@ def render_annotation(tp: Any, imports: Imports) -> str:
         return base
 
     if isinstance(tp, type):
+        # Pydantic specializations are runtime classes, not typing generic aliases.
+        meta = getattr(tp, "__pydantic_generic_metadata__", None)
+        if meta and meta.get("origin") is not None and meta.get("args"):
+            origin_ref = imports.ref(meta["origin"])
+            args_str = ", ".join(render_annotation(arg, imports) for arg in meta["args"])
+            return f"{origin_ref}[{args_str}]"
         return imports.ref(tp)
 
     return "Any"
@@ -203,11 +210,10 @@ def _render_base_ref(base: type, imports: Imports, cls_params: tuple[Any, ...] =
 
 
 def _render_bases(cls: type, imports: Imports) -> str:
-    """Render a class's base list, dropping ``object`` and ``Generic``.
+    """Render a class's base list, dropping ``object`` and redundant ``Generic``.
 
-    Type parameters — whether PEP 695 (``__type_params__``) or old-style (``Generic[TVar]``) — are
-    rendered separately by :func:`_render_type_params` as inline PEP 695 syntax on the class header,
-    so ``Generic`` never needs to appear in the base list.
+    Most type parameters are rendered as inline PEP 695 syntax on the class header.
+    Explicit variance requires old-style TypeVar declarations and a Generic base instead.
     """
     cls_params = _get_class_type_params(cls)
     rendered: list[str] = []
@@ -215,7 +221,43 @@ def _render_bases(cls: type, imports: Imports) -> str:
         if base is object or base is typing.Generic:
             continue
         rendered.append(_render_base_ref(base, imports, cls_params))
+    if _needs_explicit_variance(cls_params):
+        rendered.append(_render_generic(cls_params, imports))
     return ", ".join(rendered) if rendered else "object"
+
+
+def _needs_explicit_variance(params: tuple[Any, ...]) -> bool:
+    """Explicit variance cannot be represented by PEP 695's inferred parameters."""
+    return any(
+        (getattr(p, "__covariant__", False) or getattr(p, "__contravariant__", False))
+        and not getattr(p, "__infer_variance__", False)
+        for p in params
+    )
+
+
+def _render_generic(params: tuple[Any, ...], imports: Imports) -> str:
+    imports.add_typing("Generic")
+    for param in params:
+        imports.typevars[param.__name__] = param
+    return "Generic[" + ", ".join(p.__name__ for p in params) + "]"
+
+
+def _render_typevar(name: str, param: Any, imports: Imports) -> str:
+    """Preserve an old-style parameter's constraints, bound, default and variance."""
+    factory = type(param).__name__
+    imports.add_typing(factory)
+    args = [repr(name)]
+    args.extend(render_annotation(c, imports) for c in getattr(param, "__constraints__", ()))
+    bound = getattr(param, "__bound__", None)
+    if bound is not None:
+        args.append(f"bound={render_annotation(bound, imports)}")
+    default = getattr(param, "__default__", typing.NoDefault)
+    if default is not typing.NoDefault:
+        args.append(f"default={render_annotation(default, imports)}")
+    for flag in ("covariant", "contravariant", "infer_variance"):
+        if getattr(param, f"__{flag}__", False):
+            args.append(f"{flag}=True")
+    return f"{name} = {factory}({', '.join(args)})"
 
 
 def _is_concrete_view(cls: Any) -> bool:
@@ -284,8 +326,10 @@ def _render_param_list(params: tuple[Any, ...], imports: Imports) -> str:
 
 
 def _render_type_params(obj: Any, imports: Imports) -> str:
-    """Render PEP 695 type parameters for a class or function, or ``""`` if none."""
+    """Render inline type parameters unless a class requires explicit variance."""
     params = _get_class_type_params(obj) if isinstance(obj, type) else getattr(obj, "__type_params__", ())
+    if isinstance(obj, type) and _needs_explicit_variance(params):
+        return ""
     return _render_param_list(params, imports)
 
 
@@ -384,6 +428,9 @@ def _render_model(cls: type[BaseModel], imports: Imports) -> str:
             root_ref += "[" + ", ".join(p.__name__ for p in effective_params) + "]"
         base = f"{view_base}[{root_ref}]"
         type_params_str = _render_param_list(effective_params, imports)
+        if _needs_explicit_variance(effective_params):
+            base += ", " + _render_generic(effective_params, imports)
+            type_params_str = ""
     else:
         base = _render_bases(cls, imports)
         type_params_str = _render_type_params(cls, imports)
@@ -440,6 +487,9 @@ def _render_typeddict(cls: type, imports: Imports) -> str:
             rendered_bases.append(imports.ref(base))
     if not rendered_bases:
         rendered_bases = ["TypedDict"]
+    params = _get_class_type_params(cls)
+    if _needs_explicit_variance(params):
+        rendered_bases.append(_render_generic(params, imports))
 
     total_arg = "" if cls.__total__ else ", total=False"  # type: ignore
     base_str = ", ".join(rendered_bases) + total_arg
@@ -624,14 +674,15 @@ def render_module(module: types.ModuleType) -> str:
             emitted_names.add(name)
 
     # 2. Module-level variables and constants defined in the module.
-    variables = _render_module_variables(module, imports, emitted_names)
+    typevars = [_render_typevar(name, param, imports) for name, param in imports.typevars.items()]
+    variables = _render_module_variables(module, imports, emitted_names | imports.typevars.keys())
 
     header = (
         "# Stub generated by pydantic_views.stubgen. Includes regular types, Pydantic models,\n"
         "# declared views, and views generated at runtime by the builders.\n"
     )
     import_block = imports.render_block()
-    variable_block = "\n".join(variables)
+    variable_block = "\n".join([*typevars, *variables])
     body = "\n\n\n".join([*blocks, *functions])
     sections = [header, import_block, variable_block, body]
     return "\n\n".join(section for section in sections if section).rstrip() + "\n"

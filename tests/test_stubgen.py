@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import ast
 import enum
+import subprocess
+import sys
 import types
 import typing
 from abc import ABC
@@ -746,6 +748,126 @@ def test_generate_preserves_example_type_alias(tmp_path: Path) -> None:
     alias = next(node for node in aliases if node.name.id == "ModelTypes")
     assert ast.unparse(alias.value) == "Address | User | Role"
     assert not alias.type_params
+
+
+def test_generate_preserves_pydantic_generic_bound(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    source = (
+        "from typing import Any, Generic, TypeVar\n"
+        "from pydantic import BaseModel\n"
+        "class Request[T: BaseModel](BaseModel):\n"
+        "    params: T\n"
+        "class Params(BaseModel):\n"
+        "    name: str\n"
+        "class ConcreteRequest(Request[Params]):\n"
+        "    pass\n"
+        "TOp = TypeVar('TOp', bound=Request[Any], default=ConcreteRequest, covariant=True)\n"
+        "class Operation(BaseModel, Generic[TOp]):\n"
+        "    request: TOp\n"
+        "class NewOperation[T: Request[Any] = ConcreteRequest](BaseModel):\n"
+        "    request: T\n"
+        "class Holder(BaseModel):\n"
+        "    request: Request[Params]\n"
+        "    requests: list[Request[Any]]\n"
+        "type Requests = list[Request[Params]]\n"
+        "def process(request: Request[Params]) -> Request[Any]: ...\n"
+    )
+    module = types.ModuleType("generic_bound_models")
+    path = tmp_path / "generic_bound_models.py"
+    path.write_text(source)
+    module.__file__ = str(path)
+    monkeypatch.setitem(sys.modules, module.__name__, module)
+    exec(compile(source, str(path), "exec", dont_inherit=True), module.__dict__)
+
+    stub_path = generate(module)
+    stub = stub_path.read_text()
+    assert "TOp = TypeVar('TOp', bound=Request[Any], default=ConcreteRequest, covariant=True)" in stub
+    assert "class Operation(BaseModel, Generic[TOp])" in stub
+    assert "class NewOperation[T: Request[Any] = ConcreteRequest]" in stub
+    assert "request: Request[Params]" in stub
+    assert "requests: list[Request[Any]]" in stub
+    assert "type Requests = list[Request[Params]]" in stub
+    assert "def process(request: Request[Params]) -> Request[Any]: ..." in stub
+
+    config = tmp_path / "mypy.ini"
+    config.write_text("[mypy]\ndisallow_any_generics = true\n")
+    result = subprocess.run(
+        [sys.executable, "-m", "mypy", "--no-incremental", "--config-file", str(config), str(stub_path)],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_generated_stubs_preserve_explicit_variance(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    source = (
+        "from typing import Generic, TypeVar\n"
+        "from pydantic import BaseModel\n"
+        "from pydantic_views import View, LoadPreset\n"
+        "class Animal(BaseModel):\n"
+        "    name: str\n"
+        "class Dog(Animal):\n"
+        "    breed: str\n"
+        "TCo = TypeVar('TCo', bound=Animal, default=Dog, covariant=True)\n"
+        "TContra = TypeVar('TContra', contravariant=True)\n"
+        "TInvariant = TypeVar('TInvariant', int, str, default=str)\n"
+        "class Operation(BaseModel, Generic[TCo]):\n"
+        "    request: TCo\n"
+        "class Child(Operation[TCo]):\n"
+        "    pass\n"
+        "class OperationLoad(View[Operation[TCo]], preset=LoadPreset):\n"
+        "    pass\n"
+        "class Sink(Generic[TContra]):\n"
+        "    def accept(self, value: TContra) -> None: ...\n"
+        "class Mixed(Generic[TCo, TInvariant]):\n"
+        "    value: TInvariant\n"
+    )
+    module = types.ModuleType("variance_models")
+    path = tmp_path / "variance_models.py"
+    path.write_text(source)
+    module.__file__ = str(path)
+    monkeypatch.setitem(sys.modules, module.__name__, module)
+    exec(compile(source, str(path), "exec", dont_inherit=True), module.__dict__)
+    stub_path = generate(module)
+    stub = stub_path.read_text()
+    assert "TCo = TypeVar('TCo', bound=Animal, default=Dog, covariant=True)" in stub
+    assert "TContra = TypeVar('TContra', contravariant=True)" in stub
+    assert "TInvariant = TypeVar('TInvariant', int, str, default=str)" in stub
+    assert "class Operation(BaseModel, Generic[TCo]):" in stub
+    assert "class Child(Operation[TCo], Generic[TCo]):" in stub
+    assert "class OperationLoad(View[Operation[TCo]], Generic[TCo]):" in stub
+    assert "class Sink(Generic[TContra]):" in stub
+    assert "class Mixed(Generic[TCo, TInvariant]):" in stub
+    assert "TCo: TypeVar" not in stub
+
+    consumer = tmp_path / "consumer.py"
+    consumer.write_text(
+        "from variance_models import Animal, Dog, Operation, Child, OperationLoad, Sink, Mixed\n"
+        "def widen(value: Operation[Dog]) -> Operation[Animal]:\n"
+        "    return value\n"
+        "def widen_child(value: Child[Dog]) -> Child[Animal]:\n"
+        "    return value\n"
+        "def widen_view(value: OperationLoad[Dog]) -> OperationLoad[Animal]:\n"
+        "    return value\n"
+        "def narrow_sink(value: Sink[Animal]) -> Sink[Dog]:\n"
+        "    return value\n"
+        "def invalid_widen(value: Operation[Animal]) -> Operation[Dog]:\n"
+        "    return value  # type: ignore[return-value]\n"
+        "def invalid_sink(value: Sink[Dog]) -> Sink[Animal]:\n"
+        "    return value  # type: ignore[return-value]\n"
+        "def invariant(value: Mixed[Dog, int]) -> Mixed[Animal, str]:\n"
+        "    return value  # type: ignore[return-value]\n"
+    )
+    config = tmp_path / "mypy.ini"
+    config.write_text(
+        "[mypy]\nplugins = pydantic_views.mypy, pydantic.mypy\n"
+        "disallow_any_generics = true\nwarn_unused_ignores = true\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-m", "mypy", "--no-incremental", "--config-file", str(config), str(stub_path), str(consumer)],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_render_module_preserves_generic_and_recursive_aliases() -> None:

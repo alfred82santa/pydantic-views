@@ -335,6 +335,33 @@ class DescendentLoad(View[Descendent[TVar]], preset=LoadPreset):
     pass
 
 
+TModelCo = TypeVar("TModelCo", bound=BaseModel, default=User, covariant=True)
+
+
+class ModelResult(BaseModel, Generic[TModelCo]):  # noqa: UP046
+    """Explicit covariance must survive stub generation, including the bound and default.
+
+    The old-style declaration is intentional: converting it to PEP 695 syntax would
+    replace explicit covariance with inferred variance.
+    """
+
+    result: TModelCo
+
+
+class ModelResultLoad(View[ModelResult[TModelCo]], preset=LoadPreset):
+    """A generic view that preserves the result model's covariance."""
+
+
+def widen_user_result(result: ModelResult[User]) -> ModelResult[BaseModel]:
+    """A result containing a User is also a result containing a BaseModel."""
+    return result
+
+
+def widen_user_result_load(result: ModelResultLoad[User]) -> ModelResultLoad[BaseModel]:
+    """The same covariant assignment works for the generated load view."""
+    return result
+
+
 class ExampleTypedDict(TypedDict):
     field: str
     another_field: int
