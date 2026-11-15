@@ -86,9 +86,17 @@ class AddressPartial(View[Address]):
     type: AddressType | MISSING
     street: str | MISSING
     number: int | MISSING
+    zip_code: str | MISSING
+    notes: str | None | MISSING
 
     def __init__(
-        self, *, type: AddressType | MISSING = ..., street: str | MISSING = ..., number: int | MISSING = ...
+        self,
+        *,
+        type: AddressType | MISSING = ...,
+        street: str | MISSING = ...,
+        number: int | MISSING = ...,
+        zip_code: str | MISSING = ...,
+        notes: str | None | MISSING = ...,
     ) -> None: ...
 
 class AddressPatch(View[Address]):
@@ -227,8 +235,11 @@ class RoleLoad(View[Role]):
 class RolePartial(View[Role]):
     type: Role.RoleType | MISSING
     name: str | MISSING
+    level: int | MISSING
 
-    def __init__(self, *, type: Role.RoleType | MISSING = ..., name: str | MISSING = ...) -> None: ...
+    def __init__(
+        self, *, type: Role.RoleType | MISSING = ..., name: str | MISSING = ..., level: int | MISSING = ...
+    ) -> None: ...
 
 class RolePatch(View[Role]):
     type: Role.RoleType | None | MISSING
@@ -328,7 +339,7 @@ class UserCreateResult(View[User]):
         primary_address: AddressCreateResult,
         addresses: list[AddressCreateResult] = ...,
         roles: dict[str, RoleCreateResult] = ...,
-        display_name: str = ...,
+        display_name: str,
     ) -> None: ...
 
 class UserList(EntityList[User]):
@@ -359,12 +370,19 @@ class UserLoad(View[User]):
         primary_address: AddressLoad,
         addresses: list[AddressLoad] = ...,
         roles: dict[str, RoleLoad] = ...,
-        display_name: str = ...,
+        display_name: str,
     ) -> None: ...
 
 class UserPartial(View[User]):
     name: str | MISSING
     kind: Literal["person", "bot"] | MISSING
+    id: int | MISSING
+    created_at: datetime | MISSING
+    api_key: str | MISSING
+    password: str | MISSING
+    invite_code: str | None | MISSING
+    score: int | MISSING
+    internal_flags: int | MISSING
     primary_address: AddressPartial | MISSING
     addresses: list[AddressPartial] | MISSING
     roles: dict[str, RolePartial] | MISSING
@@ -374,6 +392,13 @@ class UserPartial(View[User]):
         *,
         name: str | MISSING = ...,
         kind: Literal["person", "bot"] | MISSING = ...,
+        id: int | MISSING = ...,
+        created_at: datetime | MISSING = ...,
+        api_key: str | MISSING = ...,
+        password: str | MISSING = ...,
+        invite_code: str | None | MISSING = ...,
+        score: int | MISSING = ...,
+        internal_flags: int | MISSING = ...,
         primary_address: AddressPartial | MISSING = ...,
         addresses: list[AddressPartial] | MISSING = ...,
         roles: dict[str, RolePartial] | MISSING = ...,

@@ -1,21 +1,26 @@
 from __future__ import annotations
 
 import sys
-from collections.abc import Iterable, Mapping
+from collections.abc import Generator, Iterable, Mapping
 from functools import reduce
 from types import NoneType, UnionType
 from typing import (
     TYPE_CHECKING,
+    Annotated,
     Any,
     ForwardRef,
     Literal,
     NamedTuple,
+    NotRequired,
+    Self,
+    TypedDict,
+    Unpack,
     cast,
     get_args,
     get_origin,
 )
 
-from pydantic import BaseModel, RootModel, create_model
+from pydantic import BaseModel, Field, RootModel, create_model
 from pydantic.fields import ComputedFieldInfo, FieldInfo
 from pydantic_core import MISSING, PydanticUndefined
 
@@ -28,6 +33,64 @@ if TYPE_CHECKING:
         from typing import TypeForm  # type: ignore
     except ImportError:
         from typing_extensions import TypeForm
+
+
+class _FieldInfoDict(TypedDict):
+    annotation: NotRequired[TypeForm[Any]]
+    metadata: NotRequired[Iterable[Any]]
+    field_params: NotRequired[dict[str, Any]]
+    default: NotRequired[Any]
+
+
+class _FieldInfo:
+    annotation: TypeForm[Any]
+    metadata: Iterable[Any]
+    field_params: dict[str, Any]
+    default: Any = PydanticUndefined
+
+    def __init__(
+        self,
+        annotation: TypeForm,
+        metadata: Iterable[Any] | None = None,
+        field_params: dict[str, Any] | None = None,
+        default: Any = PydanticUndefined,
+    ) -> None:
+        self.annotation = annotation
+        self.metadata = metadata or []
+        self.field_params = field_params or {}
+        self.default = default
+
+    def copy(self, **override_params: Unpack[_FieldInfoDict]) -> _FieldInfo:
+        return _FieldInfo(
+            annotation=override_params.get("annotation", self.annotation),
+            metadata=override_params.get("metadata", self.metadata),
+            default=override_params.get("default", self.default),
+            field_params=override_params.get("field_params", self.field_params)
+            | {
+                k: v
+                for k, v in override_params.items()
+                if k not in ("annotation", "metadata", "field_params", "default")
+            },
+        )
+
+    @classmethod
+    def from_field_info(cls, f_info: FieldInfo) -> Self:
+        f_info_dct = f_info.asdict()
+        return cls(
+            annotation=cast("TypeForm[Any]", f_info_dct["annotation"]),
+            metadata=f_info_dct["metadata"],
+            field_params={k: v for k, v in f_info_dct["attributes"].items() if k != "default"},
+            default=f_info_dct["attributes"].get("default", PydanticUndefined),
+        )
+
+    def to_field_info(self) -> TypeForm[Any] | tuple[TypeForm[Any], Any]:
+        annotation = Annotated[
+            self.annotation, *self.metadata, Field(**self.field_params)  # type: ignore[name-defined]
+        ]
+        if self.default is not PydanticUndefined:
+            return (annotation, self.default)
+
+        return annotation
 
 
 class Builder:
@@ -111,6 +174,8 @@ class Builder:
         return view
 
     def _filter_field(self, f_info: FieldInfo):
+        if not any([self.access_modes, self.include_tags, self.exclude_tags]):
+            return False
         am: set[AccessMode] = {m for m in f_info.metadata if isinstance(m, AccessMode)}
         tags: set[AccessTag] = {t for t in f_info.metadata if isinstance(t, AccessTag)}
 
@@ -119,7 +184,7 @@ class Builder:
 
         return len(tags & set(self.include_tags)) == 0
 
-    def _iter_fields[T: BaseModel](self, model: type[T]):
+    def _iter_fields[T: BaseModel](self, model: type[T]) -> Generator[tuple[str, FieldInfo]]:
         for f_name, f_info in model.model_fields.items():
             if self._filter_field(f_info):
                 continue
@@ -136,23 +201,23 @@ class Builder:
 
     def define_fields_from_model[T: BaseModel](
         self, model: type[T]
-    ) -> dict[str, tuple[TypeForm[Any] | None, FieldInfo]]:
+    ) -> dict[str, TypeForm[Any] | tuple[TypeForm[Any], Any]]:
         """
         Define fields for the view based on the provided model.
 
         :param model: Model class to derive the view from.
         :returns: Dictionary of field names and their corresponding types and FieldInfo.
         """
-        model_fields: dict[str, tuple[TypeForm[Any] | None, FieldInfo]] = {}
+        model_fields: dict[str, TypeForm[Any] | tuple[TypeForm[Any], Any]] = {}
         for f_name, f_info in self._iter_fields(model):
             model_fields[f_name] = self._map_field_info(
-                f_info,
+                _FieldInfo.from_field_info(f_info),
                 ignore_nullable=issubclass(model, RootModel),
-            )
+            ).to_field_info()
 
         if self.include_computed_fields:
             for f_name, cf_info in self._iter_computed_fields(model):
-                model_fields[f_name] = self._map_computed_field_info(cf_info)
+                model_fields[f_name] = self._map_computed_field_info(cf_info).to_field_info()
 
         return model_fields
 
@@ -211,38 +276,38 @@ class Builder:
 
     def _map_field_info(
         self,
-        f_info: FieldInfo,
+        f_info: _FieldInfo,
         *,
         ignore_nullable: bool = False,
-    ) -> tuple[TypeForm[Any] | None, FieldInfo]:
-        f_info = FieldInfo.merge_field_infos(
-            f_info,
+    ) -> _FieldInfo:
+        f_info = f_info.copy(
             annotation=self._map_annotation(f_info.annotation, ignore_nullable=ignore_nullable),
             metadata=[m for m in f_info.metadata if not isinstance(m, (AccessMode, AccessTag))],
         )
 
         if self.all_optional:
-            f_info = FieldInfo.merge_field_infos(f_info, default_factory=None, annotation=f_info.annotation | MISSING)
-            f_info.default = MISSING
+            f_info = f_info.copy(  # type: ignore
+                default_factory=PydanticUndefined,
+                annotation=f_info.annotation | MISSING,  # type: ignore[arg-type]
+                default=MISSING,
+            )
 
         if self.hide_default_null and f_info.default is None:
-            f_info = FieldInfo.merge_field_infos(
-                f_info,
-                default_factory=lambda: None,
+            f_info = f_info.copy(  # type: ignore[call-arg]
+                default_factory=lambda: None, default=PydanticUndefined
             )
-            f_info.default = PydanticUndefined
 
-        return f_info.annotation, f_info
+        return f_info
 
     def _map_annotation(
         self,
-        annotation: TypeForm[Any] | None,
+        annotation: TypeForm[Any],
         *,
         ignore_nullable: bool = False,  # pyright: ignore[reportUnknownParameterType]
-    ) -> TypeForm[Any] | ForwardRef | None | UnionType:
+    ) -> TypeForm[Any]:
         def finish_annotation(
-            a: TypeForm[Any] | None,  # pyright: ignore[reportUnknownParameterType]
-        ) -> TypeForm[Any] | None | UnionType:
+            a: TypeForm[Any],  # pyright: ignore[reportUnknownParameterType]
+        ) -> TypeForm[Any]:
             if not ignore_nullable and self.all_nullable and a is not Ellipsis:  # type: ignore
                 return a | None  # type: ignore
 
@@ -290,23 +355,21 @@ class Builder:
             [a for a in type_args if a is not NoneType or not self.hide_default_null],
         )
 
-    def _map_computed_field_info(self, cf_info: ComputedFieldInfo) -> tuple[type | None, FieldInfo]:
-        return (
-            cf_info.return_type,
-            FieldInfo(
-                annotation=cf_info.return_type,
-                alias=cf_info.alias,
-                default=None,
-                alias_priority=cf_info.alias_priority,
-                serialization_alias=cf_info.title,
-                title=cf_info.title,
-                description=cf_info.title,
-                examples=cf_info.examples,
-                discriminator=cf_info.title,
-                deprecated=cf_info.title,
-                json_schema_extra=cf_info.json_schema_extra,
-                repr=cf_info.repr,
-            ),
+    def _map_computed_field_info(self, cf_info: ComputedFieldInfo) -> _FieldInfo:
+        return _FieldInfo(
+            annotation=cf_info.return_type,
+            field_params={
+                "alias": cf_info.alias,
+                "alias_priority": cf_info.alias_priority,
+                "serialization_alias": cf_info.title,
+                "title": cf_info.title,
+                "description": cf_info.title,
+                "examples": cf_info.examples,
+                "discriminator": cf_info.title,
+                "deprecated": cf_info.title,
+                "json_schema_extra": cf_info.json_schema_extra,
+                "repr": cf_info.repr,
+            },
         )
 
 
