@@ -1,53 +1,52 @@
-========
-Examples
-========
+==================
+Practical examples
+==================
 
+Each workflow below is self-contained. The assertions are executed by the documentation's
+Sphinx doctest build, so the examples describe observable behavior rather than pseudocode.
+Use ``model_validate()`` for incoming dictionaries and ``view_build_from()`` to project
+existing model instances.
 
-Minimal create/load/update
---------------------------
+Each example also shows the view declarations emitted by
+``python -m pydantic_views.stubgen``. These ``.pyi`` excerpts omit the source-model
+definitions and other module symbols to focus on the generated contract. Field annotations
+describe the available values; ``= ...`` in a constructor means the argument may be omitted.
+The stubs describe types, while the runtime models retain field validation and metadata.
 
-Build common views from a single model and use them as function signatures.
+Create a resource and return a safe response
+============================================
 
-.. code-block:: python
+Keep server-managed fields out of creation input, accept a password without returning it,
+and expose a one-time credential only in the creation result.
 
-   from pydantic import BaseModel
-   from pydantic_views import BuilderCreate, BuilderCreateResult, BuilderLoad, BuilderUpdate
+.. testcode:: lifecycle
 
-   class User(BaseModel):
-       id: int
-       email: str
-       password: str
-
-   UserCreate = BuilderCreate().build_view(User)
-   UserCreateResult = BuilderCreateResult().build_view(User)
-   UserLoad = BuilderLoad().build_view(User)
-   UserUpdate = BuilderUpdate().build_view(User)
-
-   def create_user(input: UserCreate) -> UserCreateResult: ...
-   def get_user(user_id: int) -> UserLoad: ...
-   def update_user(user_id: int, input: UserUpdate) -> UserLoad: ...
-
-
-Declarative views with presets
--------------------------------
-
-Prefer the declarative form when you want the views to be fully type-checked: subclass ``View`` and
-pass a preset via ``preset=``. The bundled mypy plugin understands this form (unlike the
-``**Preset._asdict()`` splat), and you can still declare extra fields that live only on the view.
-
-.. code-block:: python
-
-   from pydantic import BaseModel
-   from pydantic_views import CreatePreset, CreateResultPreset, LoadPreset, UpdatePreset, View
+   from pydantic import BaseModel, Field, computed_field
+   from pydantic_views import (
+       CreatePreset,
+       CreateResultPreset,
+       LoadPreset,
+       ReadOnly,
+       ReadOnlyOnCreation,
+       View,
+       WriteOnly,
+       WriteOnlyOnCreation,
+   )
 
    class User(BaseModel):
-       id: int
-       email: str
-       password: str
+       id: ReadOnly[int]
+       name: str = Field(min_length=1)
+       password: WriteOnly[str]
+       api_key: ReadOnlyOnCreation[str]
+       invitation: WriteOnlyOnCreation[str | None] = None
+
+       @computed_field
+       @property
+       def display_name(self) -> str:
+           return f"{self.name} (#{self.id})"
 
    class UserCreate(View[User], preset=CreatePreset):
-       # A field that only exists on the view, not on the base model.
-       accept_terms: bool = False
+       pass
 
    class UserCreateResult(View[User], preset=CreateResultPreset):
        pass
@@ -55,222 +54,353 @@ pass a preset via ``preset=``. The bundled mypy plugin understands this form (un
    class UserLoad(View[User], preset=LoadPreset):
        pass
 
-   class UserUpdate(View[User], preset=UpdatePreset):
-       pass
+   incoming = UserCreate.model_validate({"name": "Ada", "password": "example-only"})
+   assert set(UserCreate.model_fields) == {"name", "password", "invitation"}
 
-   def create_user(input: UserCreate) -> UserCreateResult: ...
-   def get_user(user_id: int) -> UserLoad: ...
-   def update_user(user_id: int, input: UserUpdate) -> UserLoad: ...
+   # A service would hash the password and generate the ID and credential.
+   stored = User(id=1, name=incoming.name, password="stored-hash", api_key="issued-once")
+   created = UserCreateResult.view_build_from(stored)
+   loaded = UserLoad.view_build_from(stored)
 
-
-Declarative views without presets
-----------------------------------
-
-You do not need a preset: pass the configuration directly as keyword arguments to build any custom
-view. The recognised keywords are ``view_name``, ``access_modes``, ``all_optional``,
-``all_nullable``, ``hide_default_null`` and ``include_computed_fields``.
-
-.. code-block:: python
-
-   from pydantic import BaseModel, computed_field
-   from pydantic_views import AccessMode, ReadOnly, WriteOnly, View
-
-   class Account(BaseModel):
-       id: ReadOnly[int]
-       username: str
-       password: WriteOnly[str]
-
-       @computed_field
-       def handle(self) -> str:
-           return f"@{self.username}"
-
-   # A bespoke "public" read view spelled out with explicit keywords (no preset).
-   class AccountPublic(
-       View[Account],
-       view_name="Public",
-       access_modes=(AccessMode.READ_AND_WRITE, AccessMode.READ_ONLY),
-       include_computed_fields=True,
-   ):
-       pass
-   # -> id, username, handle   (write-only ``password`` is excluded)
-
-
-Filtering fields with tags
---------------------------
-
-Tag fields with ``AccessTag`` to force-include or force-exclude them regardless of the view's access
-modes. ``exclude_tags`` drops tagged fields that would otherwise be kept; ``include_tags`` pulls in
-tagged fields that the access modes would otherwise leave out.
+   assert created.api_key == "issued-once"
+   assert created.display_name == "Ada (#1)"
+   assert loaded.model_dump() == {"id": 1, "name": "Ada", "display_name": "Ada (#1)"}
+   assert "password" not in created.model_dump()
+   assert "api_key" not in loaded.model_dump()
 
 .. code-block:: python
+   :caption: Generated .pyi — view declarations
 
-   from typing import Annotated
+   from pydantic_views import View
+
+   class UserCreate(View[User]):
+       name: str
+       password: str
+       invitation: str
+
+       def __init__(self, *, name: str, password: str, invitation: str = ...) -> None: ...
+
+   class UserCreateResult(View[User]):
+       id: int
+       name: str
+       api_key: str
+       display_name: str
+
+       def __init__(self, *, id: int, name: str, api_key: str, display_name: str) -> None: ...
+
+   class UserLoad(View[User]):
+       id: int
+       name: str
+       display_name: str
+
+       def __init__(self, *, id: int, name: str, display_name: str) -> None: ...
+
+Views define which fields belong to each schema. For input that must reject unknown keys
+rather than ignore them, set Pydantic's ``model_config = {"extra": "forbid"}`` on the
+source model. Its configuration is carried into the generated views.
+
+Apply a nested partial update
+=============================
+
+Update only the supplied nested values. Dictionaries merge by key, while sequences are
+replaced. Pass a deep copy to retain an unchanged original instance.
+
+.. testcode:: nested-update
 
    from pydantic import BaseModel
-   from pydantic_views import AccessMode, AccessTag, View
-
-   class Article(BaseModel):
-       title: str
-       body: str
-       # Read-only, but only meant for staff:
-       moderation_notes: Annotated[str, AccessMode.READ_ONLY, AccessTag("admin")]
-       view_count: Annotated[int, AccessMode.READ_ONLY, AccessTag("stats")]
-       # Write-only secret used to build a preview link:
-       draft_token: Annotated[str, AccessMode.WRITE_ONLY, AccessTag("preview")]
-
-   # Public view: keep readable fields, but drop anything tagged "admin".
-   class ArticlePublic(
-       View[Article],
-       view_name="Public",
-       access_modes=(AccessMode.READ_AND_WRITE, AccessMode.READ_ONLY),
-       exclude_tags=(AccessTag("admin"),),
-   ):
-       pass
-   # -> title, body, view_count   (moderation_notes dropped by its tag)
-
-   # Preview view: readable fields plus the write-only ``draft_token`` pulled in by its tag.
-   class ArticlePreview(
-       View[Article],
-       view_name="Preview",
-       access_modes=(AccessMode.READ_AND_WRITE, AccessMode.READ_ONLY),
-       include_tags=(AccessTag("preview"),),
-   ):
-       pass
-   # -> title, body, moderation_notes, view_count, draft_token
-
-``AccessTag`` instances are interned by name (``AccessTag("preview") is AccessTag("preview")``), so the
-same tag object is reused everywhere you reference it.
-
-
-Nested models and selective fields
-----------------------------------
-
-Views cascade into nested models and respect access modes you annotate.
-
-.. code-block:: python
-
-   from typing import Annotated
-
-   from pydantic import BaseModel, computed_field
-   from pydantic_views import AccessMode, ReadOnly, ReadOnlyOnCreation, BuilderLoad
+   from pydantic_views import ReadOnly, UpdatePreset, View
 
    class Address(BaseModel):
        street: str
        city: str
-       zip_code: str
+       postal_code: ReadOnly[str]
 
    class Profile(BaseModel):
-       username: str
-       email: ReadOnly[str]
-       # Hide on create/update, show after creation
-       api_token: ReadOnlyOnCreation[str]
-       # Expose only when reading (load views)
-       score: Annotated[int, AccessMode.READ_ONLY]
-
-       @computed_field
-       def location(self) -> str:
-           return f"{self.username} @ {self.email}"
-
+       id: ReadOnly[int]
        address: Address
+       preferences: dict[str, str]
+       labels: list[str]
 
-   ProfileLoad = BuilderLoad().build_view(Profile)
+   class ProfileUpdate(View[Profile], preset=UpdatePreset):
+       pass
 
-   profile = Profile(
-       username="alice",
-       email="alice@example.com",
-       api_token="secret",
-       score=42,
-       address=Address(street="Main", city="Springfield", zip_code="00000"),
+   original = Profile(
+       id=1,
+       address=Address(street="Main Street", city="London", postal_code="E1"),
+       preferences={"theme": "light", "language": "en"},
+       labels=["customer", "newsletter"],
    )
+   changes = ProfileUpdate.model_validate(
+       {"address": {"city": "Oxford"}, "preferences": {"theme": "dark"}, "labels": ["customer"]}
+   )
+   updated = changes.view_apply_to(original.model_copy(deep=True))
 
-   loaded = ProfileLoad.view_build_from(profile)
-   assert loaded.address.city == "Springfield"
-   # api_token and score are present, write-only fields would have been stripped
-
-
-Applying partial updates
-------------------------
-
-Update views accept only the fields you want to change and merge them into an instance.
-
-.. code-block:: python
-
-   from pydantic import BaseModel
-   from pydantic_views import BuilderUpdate
-
-   class Settings(BaseModel):
-       theme: str
-       locale: str
-       marketing_opt_in: bool
-
-   SettingsUpdate = BuilderUpdate().build_view(Settings)
-
-   current = Settings(theme="light", locale="en", marketing_opt_in=False)
-   patch = SettingsUpdate(theme="dark")
-
-   updated = patch.view_apply_to(current)
-
-   assert updated.theme == "dark"
-   assert updated.locale == "en"  # unchanged
-
-
-Create + result pair with computed fields
------------------------------------------
-
-Use ``BuilderCreate`` to accept input and ``BuilderCreateResult`` to return read-only and computed fields.
+   assert updated.address.city == "Oxford"
+   assert updated.address.street == "Main Street"
+   assert updated.address.postal_code == "E1"
+   assert updated.preferences == {"theme": "dark", "language": "en"}
+   assert updated.labels == ["customer"]
+   assert original.address.city == "London"
 
 .. code-block:: python
+   :caption: Generated .pyi — view declarations
+
+   from pydantic_core import MISSING
+   from pydantic_views import View
+
+   class AddressUpdate(View[Address]):
+       street: str | MISSING
+       city: str | MISSING
+
+       def __init__(self, *, street: str | MISSING = ..., city: str | MISSING = ...) -> None: ...
+
+   class ProfileUpdate(View[Profile]):
+       address: AddressUpdate | MISSING
+       preferences: dict[str, str] | MISSING
+       labels: list[str] | MISSING
+
+       def __init__(
+           self,
+           *,
+           address: AddressUpdate | MISSING = ...,
+           preferences: dict[str, str] | MISSING = ...,
+           labels: list[str] | MISSING = ...,
+       ) -> None: ...
+
+Optional does not mean nullable
+===============================
+
+An omitted field means "leave it alone". An explicit ``None`` means "set it to null" and
+is accepted only when the field's type permits it.
+
+.. testcode:: omission
+
+   from pydantic import BaseModel, ValidationError
+   from pydantic_core import MISSING
+   from pydantic_views import UpdatePreset, View
+
+   class Preferences(BaseModel):
+       theme: str = "light"
+       nickname: str | None = None
+
+   class PreferencesUpdate(View[Preferences], preset=UpdatePreset):
+       pass
+
+   empty = PreferencesUpdate.model_validate({})
+   clear = PreferencesUpdate.model_validate({"nickname": None})
+
+   assert empty.theme is MISSING
+   assert empty.model_fields_set == set()
+   assert empty.model_dump() == {}
+   assert clear.model_fields_set == {"nickname"}
+   assert clear.model_dump() == {"nickname": None}
+
+   try:
+       PreferencesUpdate.model_validate({"theme": None})
+   except ValidationError:
+       pass
+   else:
+       raise AssertionError("theme is optional, but not nullable")
+
+.. code-block:: python
+   :caption: Generated .pyi — view declarations
+
+   from pydantic_core import MISSING
+   from pydantic_views import View
+
+   class PreferencesUpdate(View[Preferences]):
+       theme: str | MISSING
+       nickname: str | None | MISSING
+
+       def __init__(self, *, theme: str | MISSING = ..., nickname: str | None | MISSING = ...) -> None: ...
+
+Use Partial for internal data transfer
+======================================
+
+``PartialPreset`` keeps every source field and makes it optional, including fields with
+read-only, write-only, and hidden access modes. Computed fields are excluded. This is useful
+for internal synchronization where a payload contains only the data currently available.
+
+.. testcode:: partial
 
    from pydantic import BaseModel, computed_field
-   from pydantic_views import BuilderCreate, BuilderCreateResult, ReadOnly
+   from pydantic_core import MISSING
+   from pydantic_views import Hidden, PartialPreset, ReadOnly, View, WriteOnly
 
-   class Invoice(BaseModel):
+   class Account(BaseModel):
        id: ReadOnly[int]
-       description: str
-       units: int
-       unit_price: float
+       username: str
+       password_hash: WriteOnly[str]
+       internal_revision: Hidden[int]
 
        @computed_field
-       def total(self) -> float:
-           return self.units * self.unit_price
+       @property
+       def label(self) -> str:
+           return f"{self.username} (#{self.id})"
 
-   InvoiceCreate = BuilderCreate().build_view(Invoice)
-   InvoiceCreateResult = BuilderCreateResult().build_view(Invoice)
+   class AccountPartial(View[Account], preset=PartialPreset):
+       pass
 
-   new_invoice = InvoiceCreate(description="Hosting", units=2, unit_price=25.0)
-   stored = Invoice(id=1, **new_invoice.model_dump())
+   empty = AccountPartial.model_validate({})
+   sync = AccountPartial.model_validate({"id": 8, "internal_revision": 3})
 
-   result = InvoiceCreateResult.view_build_from(stored)
-   assert result.total == 50.0
-
-
-Custom builder with nullable fields
------------------------------------
-
-Craft a bespoke builder to expose only certain access modes and make every field optional and
-nullable — a patch-style view where you set just the fields you want to change.
+   assert empty.username is MISSING
+   assert empty.model_dump() == {}
+   assert sync.model_dump() == {"id": 8, "internal_revision": 3}
+   assert "password_hash" in AccountPartial.model_fields
+   assert "label" not in AccountPartial.model_fields
 
 .. code-block:: python
+   :caption: Generated .pyi — view declarations
+
+   from pydantic_core import MISSING
+   from pydantic_views import View
+
+   class AccountPartial(View[Account]):
+       id: int | MISSING
+       username: str | MISSING
+       password_hash: str | MISSING
+       internal_revision: int | MISSING
+
+       def __init__(
+           self,
+           *,
+           id: int | MISSING = ...,
+           username: str | MISSING = ...,
+           password_hash: str | MISSING = ...,
+           internal_revision: int | MISSING = ...,
+       ) -> None: ...
+
+For public update input, prefer ``UpdatePreset``, which filters out read-only and hidden
+fields. For public responses, use ``LoadPreset`` or a custom filtered view.
+
+Select fields for an internal workflow
+======================================
+
+Combine standard access rules with a tag to include one additional field. Add a field to
+the view when it belongs only to that workflow.
+
+.. testcode:: tags
+
+   from typing import Annotated
 
    from pydantic import BaseModel
-   from pydantic_views import Builder, AccessMode
+   from pydantic_views import AccessMode, AccessTag, Hidden, ReadOnly, View
 
-   SoftDeleteBuilder = Builder(
-       view_name="SoftDelete",
-       access_modes=(AccessMode.READ_AND_WRITE,),
-       all_optional=True,
-       all_nullable=True,
+   class Ticket(BaseModel):
+       id: ReadOnly[int]
+       subject: str
+       staff_note: Annotated[str, AccessMode.WRITE_ONLY, AccessTag("support")]
+       internal_token: Hidden[str]
+
+   class SupportTicket(
+       View[Ticket],
+       view_name="Support",
+       access_modes=(AccessMode.READ_AND_WRITE, AccessMode.READ_ONLY),
+       include_tags=(AccessTag("support"),),
+   ):
+       assigned_queue: str
+
+   ticket = SupportTicket.model_validate(
+       {"id": 4, "subject": "Delivery", "staff_note": "Investigating", "assigned_queue": "orders"}
    )
+   assert ticket.staff_note == "Investigating"
+   assert ticket.assigned_queue == "orders"
+   assert "internal_token" not in SupportTicket.model_fields
 
-   class Document(BaseModel):
-       title: str
-       body: str
-       deleted_at: float | None = None
+.. code-block:: python
+   :caption: Generated .pyi — view declarations
 
-   DocumentSoftDelete = SoftDeleteBuilder.build_view(Document)
+   from pydantic_views import View
 
-   doc = Document(title="Plan", body="...")
-   soft_delete = DocumentSoftDelete(deleted_at=1720000000.0)
+   class SupportTicket(View[Ticket]):
+       assigned_queue: str
+       id: int
+       subject: str
+       staff_note: str
 
-   deleted_doc = soft_delete.view_apply_to(doc)
-   assert deleted_doc.deleted_at is not None
+       def __init__(self, *, assigned_queue: str, id: int, subject: str, staff_note: str) -> None: ...
+
+Generate views for root models
+==============================
+
+A root model keeps its array-shaped payload rather than adding an object wrapper. Nested
+items still receive the selected field filtering.
+
+.. testcode:: root-model
+
+   from pydantic import BaseModel, RootModel
+   from pydantic_views import BuilderLoad, ReadOnly, WriteOnly
+
+   class Item(BaseModel):
+       id: ReadOnly[int]
+       name: str
+       internal_note: WriteOnly[str]
+
+   class Catalog(RootModel[list[Item]]):
+       pass
+
+   CatalogLoad = BuilderLoad().build_view(Catalog)
+   catalog = CatalogLoad.model_validate([{"id": 1, "name": "Notebook"}])
+   assert catalog.root[0].name == "Notebook"
+   assert catalog.model_dump() == [{"id": 1, "name": "Notebook"}]
+
+.. code-block:: python
+   :caption: Generated .pyi — view declarations
+
+   from pydantic_views import RootView, View
+
+   class CatalogLoad(RootView[Catalog]):
+       root: list[ItemLoad]
+
+       def __init__(self, *, root: list[ItemLoad]) -> None: ...
+
+   class ItemLoad(View[Item]):
+       id: int
+       name: str
+
+       def __init__(self, *, id: int, name: str) -> None: ...
+
+Use generic containers
+======================
+
+Specialize a generic model before declaring a view when the endpoint has a concrete item
+type. Nested access rules apply to the items as well as the enclosing model.
+
+.. testcode:: generics
+
+   from pydantic import BaseModel
+   from pydantic_views import LoadPreset, View, WriteOnly
+
+   class Person(BaseModel):
+       name: str
+       secret: WriteOnly[str]
+
+   class Page[T: BaseModel](BaseModel):
+       items: list[T]
+       total: int
+
+   class PeoplePageLoad(View[Page[Person]], preset=LoadPreset):
+       pass
+
+   page = PeoplePageLoad.model_validate({"items": [{"name": "Ada"}], "total": 1})
+   assert page.model_dump() == {"items": [{"name": "Ada"}], "total": 1}
+
+.. code-block:: python
+   :caption: Generated .pyi — view declarations
+
+   from pydantic_views import View
+
+   class PeoplePageLoad(View[Page]):
+       items: list[PersonLoad]
+       total: int
+
+       def __init__(self, *, items: list[PersonLoad], total: int) -> None: ...
+
+   class PersonLoad(View[Person]):
+       name: str
+
+       def __init__(self, *, name: str) -> None: ...
+
+For static typing of runtime-generated classes and generic views, see
+:doc:`type_checking`.

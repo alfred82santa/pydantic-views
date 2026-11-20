@@ -8,8 +8,8 @@
 
 from importlib import metadata
 
-project = "Views for Pydantic models"
-copyright = "2025, Alfred Santacatalina"
+project = "Pydantic Views"
+copyright = "2025–2026, Alfred Santacatalina"
 author = "Alfred Santacatalina"
 release = metadata.version("pydantic-views")
 language = "en"
@@ -19,6 +19,7 @@ language = "en"
 
 extensions = [
     "sphinx.ext.autodoc",
+    "sphinx.ext.doctest",
     "sphinx.ext.intersphinx",
     "sphinxcontrib.autodoc_pydantic",
 ]
@@ -32,19 +33,23 @@ exclude_patterns = []
 
 html_theme = "alabaster"
 html_static_path = ["_static"]
+html_css_files = ["custom.css"]
+html_title = "Pydantic Views — Typed schemas from one model"
+html_logo = "_static/pydantic-views-logo-192.png"
+html_favicon = "_static/favicon.ico"
 
 html_theme_options = {
     "page_width": "1100px",
-    "sidebar_width": "350px",
-    "github_repo": "alfred82santa/pydantic-views",
+    "sidebar_width": "260px",
+    "github_user": "alfred82santa",
+    "github_repo": "pydantic-views",
     "github_banner": True,
+    "description": "One domain model. Purpose-built schemas for every operation.",
 }
 
 # -- Autodoc config -----------------------------------------------
 
 # autodoc_typehints = "description"
-
-autodoc_type_aliases = {"Command": "click.Command"}
 
 autodoc_member_order = "bysource"
 
