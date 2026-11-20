@@ -1,0 +1,65 @@
+/* A restrained reading layout, with room for API signatures and code samples. */
+body {
+    color: #203040;
+    background: #f6f8fb;
+}
+div.document {
+    margin-top: 2rem;
+}
+div.body {
+    background: #fff;
+    padding: 1.5rem 2.5rem 3rem;
+    border-radius: 8px;
+    line-height: 1.65;
+}
+div.body h1, div.body h2, div.body h3 {
+    color: #16364a;
+    font-family: system-ui, sans-serif;
+    line-height: 1.25;
+}
+div.body h2 {
+    margin-top: 2rem;
+    padding-bottom: .35rem;
+    border-bottom: 1px solid #dce5ec;
+}
+a {
+    color: #096d83;
+}
+pre {
+    background: #f2f6f9;
+    border: 1px solid #dce5ec;
+    border-radius: 5px;
+    padding: 1rem;
+    line-height: 1.5;
+    overflow-x: auto;
+}
+div.sphinxsidebar {
+    font-family: system-ui, sans-serif;
+}
+div.sphinxsidebar a {
+    color: #254b60;
+}
+table.docutils {
+    border-collapse: collapse;
+    width: 100%;
+}
+table.docutils th, table.docutils td {
+    border: 1px solid #dce5ec;
+    padding: .6rem .75rem;
+    vertical-align: top;
+}
+table.docutils th {
+    background: #eaf2f7;
+}
+@media screen and (max-width: 875px) {
+    div.body {
+        padding: 1rem;
+    }
+    div.document {
+        margin-top: 0;
+    }
+    div.body table {
+        display: block;
+        overflow-x: auto;
+    }
+}
