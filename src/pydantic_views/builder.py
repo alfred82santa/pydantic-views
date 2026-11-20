@@ -504,3 +504,10 @@ def ensure_model_views[T: BaseModel](model: type[T]):
     model.model_views = manager  # type: ignore
 
     return manager
+
+
+PartialPreset = Preset(
+    view_name="Partial",
+    all_optional=True,
+    include_computed_fields=False,
+)

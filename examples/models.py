@@ -30,6 +30,7 @@ from pydantic_views import (
     CreatePreset,
     Hidden,
     LoadPreset,
+    PartialPreset,
     Preset,
     ReadOnly,
     ReadOnlyOnCreation,
@@ -367,5 +368,5 @@ class ExampleTypedDict(TypedDict):
     another_field: int
 
 
-class UserPartial(View[User], view_name="Partial", all_optional=True):
+class UserPartial(View[User], preset=PartialPreset):
     pass
