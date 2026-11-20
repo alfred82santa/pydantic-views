@@ -4,9 +4,10 @@ from typing import Self, cast
 import pytest
 from pydantic import BaseModel, Field
 from pydantic.alias_generators import to_camel
+from pydantic_core import MISSING
 
 from pydantic_views.annotations import WriteOnly
-from pydantic_views.builder import BuilderLoad, BuilderUpdate, ensure_model_views
+from pydantic_views.builder import BuilderLoad, BuilderUpdate, PartialPreset, ensure_model_views
 from pydantic_views.view import View, model_apply
 
 
@@ -33,6 +34,32 @@ class ModelAlias(Model, alias_generator=to_camel):
 ModelAliasUpdate = BuilderUpdate().build_view(ModelAlias)
 ModelAliasLoad = BuilderLoad().build_view(ModelAlias)
 ensure_model_views(model=ModelAlias)["Replica"] = ModelAlias
+
+
+def test_partial_preset_on_declared_view():
+    class ModelPartial(View[Model], preset=PartialPreset):
+        pass
+
+    assert ensure_model_views(Model)["Partial"] is ModelPartial
+    assert set(ModelPartial.model_fields) == set(Model.model_fields)
+    empty = ModelPartial.model_validate({})
+    assert all(getattr(empty, name) is MISSING for name in Model.model_fields)
+    assert empty.model_dump() == {}
+
+    partial = ModelPartial.model_validate({"field_str": "partial", "field_recurrent": {"field_int": 2}})
+    assert partial.field_str == "partial"
+    assert partial.field_recurrent.field_int == 2
+    assert partial.field_recurrent.field_str is MISSING
+
+
+def test_partial_preset_explicit_keywords_override_defaults():
+    class RequiredPartial(View[Model], preset=PartialPreset, view_name="RequiredPartial", all_optional=False):
+        pass
+
+    assert ensure_model_views(Model)["RequiredPartial"] is RequiredPartial
+    assert RequiredPartial.model_validate({}).field_int == 1
+    assert RequiredPartial.model_validate({}).field_str == "default str"
+    assert RequiredPartial.model_fields["field_dict"].default_factory is not None
 
 
 @pytest.mark.parametrize(

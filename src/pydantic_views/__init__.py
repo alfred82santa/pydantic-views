@@ -24,6 +24,7 @@ from .builder import (
     CreatePreset,
     CreateResultPreset,
     LoadPreset,
+    PartialPreset,
     Preset,
     UpdatePreset,
     ensure_model_views,
@@ -54,4 +55,5 @@ __all__ = [
     "Manager",
     "View",
     "RootView",
+    "PartialPreset",
 ]
