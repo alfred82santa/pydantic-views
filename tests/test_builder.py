@@ -24,6 +24,7 @@ from pydantic_views.builder import (
     BuilderCreateResult,
     BuilderLoad,
     BuilderUpdate,
+    PartialPreset,
     ensure_model_views,
 )
 from pydantic_views.view import View
@@ -698,6 +699,12 @@ def test_view_complex_types_all_nullable(view_name: str, access_modes: tuple[Acc
     ("builder", "view_name", "expected_fields"),
     [
         pytest.param(
+            lambda: Builder(**PartialPreset._asdict()),
+            "Partial",
+            set(Model.model_fields),
+            id="Partial",
+        ),
+        pytest.param(
             BuilderLoad,
             "Load",
             {
@@ -768,3 +775,55 @@ def test_standard_builders(builder: Callable[[], Builder], view_name: str, expec
 
     assert ensure_model_views(Model)[view_name] == view
     assert set(view.model_fields.keys()) == expected_fields
+
+
+def test_partial_preset_omitted_fields_use_missing():
+    view = Builder(**PartialPreset._asdict()).build_view(Model)
+    assert set(view.model_fields) == set(Model.model_fields)
+    assert not (set(view.model_fields) & set(Model.model_computed_fields))
+    partial = view.model_validate({})
+    assert partial.model_dump() == {}
+
+    for name, field in Model.model_fields.items():
+        assert not view.model_fields[name].is_required()
+        assert view.model_fields[name].default is MISSING
+        assert view.model_fields[name].annotation == field.annotation | MISSING
+        assert partial.__dict__[name] is MISSING
+
+    supplied = view.model_validate({"hidden_int": 7, "write_only_field_str": "secret", "readOnlyFieldInt": 3})
+    assert supplied.hidden_int == 7
+    assert supplied.write_only_field_str == "secret"
+    assert supplied.read_only_field_int == 3
+    assert supplied.model_dump() == {"hidden_int": 7, "write_only_field_str": "secret", "read_only_field_int": 3}
+
+
+def test_partial_preset_nested_models_and_validation():
+    class PartialChild(BaseModel):
+        name: str
+        count: int = 1
+
+    class PartialParent(BaseModel):
+        child: PartialChild
+        children: list[PartialChild] = Field(default_factory=list)
+        nullable: int | None = None
+        kind: Literal["person", "bot"] = "person"
+
+    view = Builder(**PartialPreset._asdict()).build_view(PartialParent)
+    empty = view.model_validate({})
+    assert empty.model_dump() == {}
+    assert empty.children is MISSING
+    assert empty.nullable is MISSING
+    assert empty.kind is MISSING
+
+    partial = view.model_validate({"child": {}, "children": [{"name": "example"}], "nullable": None, "kind": "bot"})
+    assert partial.child.name is MISSING
+    assert partial.child.count is MISSING
+    assert partial.children[0].name == "example"
+    assert partial.children[0].count is MISSING
+    assert partial.nullable is None
+    assert partial.kind == "bot"
+    assert partial.model_dump() == {"child": {}, "children": [{"name": "example"}], "nullable": None, "kind": "bot"}
+
+    for invalid in ({"child": None}, {"nullable": "invalid"}, {"kind": "invalid"}):
+        with pytest.raises(ValueError):
+            view.model_validate(invalid)
