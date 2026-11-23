@@ -3,9 +3,10 @@ Practical examples
 ==================
 
 Each workflow below is self-contained. The assertions are executed by the documentation's
-Sphinx doctest build, so the examples describe observable behavior rather than pseudocode.
-Use ``model_validate()`` for incoming dictionaries and ``view_build_from()`` to project
-existing model instances.
+`Sphinx <https://www.sphinx-doc.org/>`_ doctest build, so the examples describe observable
+behavior rather than pseudocode.
+Use :meth:`~pydantic.BaseModel.model_validate` for incoming dictionaries and
+:meth:`~pydantic_views.View.view_build_from` to project existing model instances.
 
 Each example also shows the view declarations emitted by
 ``python -m pydantic_views.stubgen``. These ``.pyi`` excerpts omit the source-model
@@ -96,7 +97,8 @@ and expose a one-time credential only in the creation result.
        def __init__(self, *, id: int, name: str, display_name: str) -> None: ...
 
 Views define which fields belong to each schema. For input that must reject unknown keys
-rather than ignore them, set Pydantic's ``model_config = {"extra": "forbid"}`` on the
+rather than ignore them, set `Pydantic <https://pydantic.dev/>`_'s
+``model_config = {"extra": "forbid"}`` on the
 source model. Its configuration is carried into the generated views.
 
 Apply a nested partial update

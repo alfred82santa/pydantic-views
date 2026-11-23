@@ -144,8 +144,8 @@ class User(BaseModel):
 
     # Complex / nested fields.
     primary_address: Address
-    addresses: list[Address] = Field(default_factory=list)
-    roles: dict[str, Role] = Field(default_factory=dict)
+    addresses: Annotated[list[Address], Field(default_factory=list)]
+    roles: Annotated[dict[str, Role], Field(default_factory=dict)]
 
     @computed_field
     def display_name(self) -> str:

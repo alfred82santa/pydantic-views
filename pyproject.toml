@@ -106,8 +106,18 @@ dev = [
 ]
 docs = [
     "autodoc-pydantic>=2.2.0",
+    "rstformat[lint]>=0.1.1",
     "sphinx>=9.1.0",
 ]
+
+[tool.rstformat]
+adornments            = "#*=-^\"'`:.~_+"
+insert_final_newline  = true
+line_ending           = "lf"   # "lf" | "crlf" | "auto"
+max_consecutive_blank_lines = 2
+normalize_section_spacing   = true
+normalize_section_underlines = true
+trim_trailing_whitespace     = true
 
 [tool.poe.tasks]
 build = "uv build"

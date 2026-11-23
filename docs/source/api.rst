@@ -110,7 +110,7 @@ Pass a preset as ``preset=`` on a ``View`` subclass, or use
 Views and conversion
 ====================
 
-Generated views are Pydantic models with additional conversion helpers. Reconstruction
+Generated views are `Pydantic <https://pydantic.dev/>`_ models with additional conversion helpers. Reconstruction
 validates against the source model. Update helpers merge explicitly supplied fields;
 see :doc:`guide` for merge semantics and instance handling.
 
@@ -121,6 +121,8 @@ see :doc:`guide` for merge semantics and instance handling.
    :no-inherited-members:
 
 .. autofunction:: pydantic_views.view.model_apply
+
+.. autofunction:: pydantic_views.is_view_of
 
 Builders and registry
 =====================
@@ -148,6 +150,7 @@ registered class, so use distinct names for distinct contracts.
 Static tooling
 ==============
 
-The mypy plugin entry point is ``pydantic_views.mypy``. The runtime stub generator is
-available as ``python -m pydantic_views.stubgen``. See :doc:`type_checking` for setup,
+The `mypy <https://mypy.readthedocs.io/>`_ plugin entry point is ``pydantic_views.mypy``.
+The runtime stub generator is available as ``python -m pydantic_views.stubgen``. See
+:doc:`type_checking` for setup,
 supported workflows, and limitations.

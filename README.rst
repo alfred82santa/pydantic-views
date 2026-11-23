@@ -1,4 +1,4 @@
-.. |docs| image:: https://readthedocs.org/projects/pydantic-views/badge/?version=stable
+.. |docs| image:: https://app.readthedocs.org/projects/pydantic-views/badge/?version=stable
    :alt: Documentation
    :target: https://pydantic-views.readthedocs.io/stable/
 
@@ -28,23 +28,34 @@ Pydantic Views
 
 **One domain model. Purpose-built schemas for every operation.**
 
-Define your fields and access rules once, then derive Pydantic models for creation,
+Define your fields and access rules once, then derive `Pydantic <https://pydantic.dev/>`_ models for creation,
 responses, updates, and internal workflows. Keep validation constraints and field metadata
 consistent as your application grows, without maintaining a separate schema by hand for
 each operation.
 
-The generated views are Pydantic models: validate input, serialize output, and generate
+The generated views are `Pydantic <https://pydantic.dev/>`_ models: validate input, serialize output, and generate
 JSON Schema with the APIs you already use.
+
+Legal disclaimer
+================
+
+``pydantic-views`` is an independent, community-maintained project. It is not affiliated
+with, endorsed by, sponsored by, or otherwise associated with the
+`Pydantic <https://pydantic.dev/>`_ project or its maintainers.
 
 Installation
 ============
 
-Requires Python 3.13 or later and Pydantic 2.
+Requires `Python <https://www.python.org/>`_ 3.13 or later and `Pydantic <https://pydantic.dev/>`_ 2.
 
 .. code-block:: bash
 
    pip install pydantic-views
-   # Or, with uv:
+
+Install with `uv <https://docs.astral.sh/uv/>`_ as an alternative:
+
+.. code-block:: bash
+
    uv add pydantic-views
 
 From one model to an API boundary
@@ -123,8 +134,10 @@ What you can build
 * **Flexible construction:** declare ``View[Model]`` subclasses with extra fields or
   generate and cache classes dynamically with a ``Builder`` and per-model ``Manager``.
 * **Computed response fields:** include computed values in load and create-result views.
-* **Static tooling:** a mypy plugin for declared views and a runtime ``.pyi`` generator
-  for Pyright, Pylance, and other stub-aware tools. The package includes ``py.typed``.
+* **Static tooling:** a `mypy <https://mypy.readthedocs.io/>`_ plugin for declared views and a runtime ``.pyi`` generator
+  for `Pyright <https://microsoft.github.io/pyright/>`_,
+  `Pylance <https://github.com/microsoft/pylance-release>`_, and other stub-aware tools.
+  The package includes ``py.typed``.
 
 Choose a preset
 ===============
@@ -160,7 +173,7 @@ separate.
 Type checking
 =============
 
-For mypy, enable both plugins in this order:
+For `mypy <https://mypy.readthedocs.io/>`_, enable both plugins in this order:
 
 .. code-block:: toml
 
@@ -174,7 +187,7 @@ For stub-aware editors and type checkers, generate stubs from your runtime model
    python -m pydantic_views.stubgen myapp.models
 
 This writes ``myapp/models.pyi`` next to the source. Regenerate it when the models change;
-a type checker uses the adjacent stub in preference to the Python file. The mypy plugin
+a type checker uses the adjacent stub in preference to the `Python <https://www.python.org/>`_ file. The `mypy <https://mypy.readthedocs.io/>`_ plugin
 skips stub files, so generated stubs and the plugin can coexist.
 
 Continue reading

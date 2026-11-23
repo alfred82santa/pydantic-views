@@ -2,7 +2,7 @@
 User guide
 ==========
 
-A view is a Pydantic model derived from another model's fields. It defines a data contract
+A view is a `Pydantic <https://pydantic.dev/>`_ model derived from another model's fields. It defines a data contract
 for a particular operation without duplicating the source field definitions. Start with a
 preset, then add explicit access rules or a custom configuration where needed.
 
@@ -76,7 +76,8 @@ transfer when access filtering is not the goal.
 Presets and declarative views
 =============================
 
-Use ``preset=`` on a ``View[Model]`` subclass for named schemas that work with the mypy
+Use ``preset=`` on a ``View[Model]`` subclass for named schemas that work with the
+`mypy <https://mypy.readthedocs.io/>`_
 plugin and can declare their own fields:
 
 .. testcode:: guide-create
@@ -139,7 +140,8 @@ These are distinct properties:
 * **Unset input** is absent from ``model_fields_set``. View update helpers use the set of
   supplied fields to decide what to merge.
 
-Pydantic omits ``MISSING`` values from serialization. A supplied ``None`` remains a value:
+`Pydantic <https://pydantic.dev/>`_ omits ``MISSING`` values from serialization. A supplied
+``None`` remains a value:
 
 .. testcode:: guide-omission
 
@@ -174,17 +176,19 @@ omitting such a field can be allowed even when explicitly passing ``None`` is re
 Nested models and containers
 ============================
 
-A view's configuration propagates to referenced Pydantic models, including recursive and
+A view's configuration propagates to referenced `Pydantic <https://pydantic.dev/>`_ models, including recursive and
 circular references. For example, ``UserLoad`` can contain generated ``AddressLoad``
 instances, while ``UserUpdate`` contains the corresponding update views. Models inside
-lists, sets, tuples, dictionaries, and unions are supported, as are generic Pydantic models.
+lists, sets, tuples, dictionaries, and unions are supported, as are generic
+`Pydantic <https://pydantic.dev/>`_ models.
 
-Build nested values from dictionaries with ``model_validate()`` or project an existing
-model with ``view_build_from()``. Generated nested classes need not be imported manually.
+Build nested values from dictionaries with :meth:`~pydantic.BaseModel.model_validate` or
+project an existing model with :meth:`~pydantic_views.View.view_build_from`. Generated
+nested classes need not be imported manually.
 See :doc:`examples` for a complete nested-update workflow.
 
 ``RootModel`` sources receive ``RootView`` wrappers. Their payload remains available as
-``root`` and serializes in the usual root-model form. The mypy plugin does not expand
+``root`` and serializes in the usual root-model form. The `mypy <https://mypy.readthedocs.io/>`_ plugin does not expand
 ``RootView`` fields; generated stubs can describe their runtime structure.
 
 Validation and metadata
@@ -216,7 +220,8 @@ reusable field constraints in annotations, add view-specific validation explicit
 validate against the source model when reconstructing domain data.
 
 Read presets include computed values as ordinary view fields. Populate them from a source
-instance with ``view_build_from()``; a view does not recompute the source property itself.
+instance with :meth:`~pydantic_views.View.view_build_from`; a view does not recompute the
+source property itself.
 
 Custom selection with tags
 ==========================
@@ -273,10 +278,41 @@ presets. Use ``Builder(**PartialPreset._asdict())`` for a dynamic Partial view.
    assert builder.build_view(Event) is EventPartial
    assert ensure_model_views(Event)["Partial"] is EventPartial
 
-``ensure_model_views(Model)`` returns the model's ``Manager``, a registry indexed by view
-name. View classes are reused for a given source model and name; choose distinct names for
-different configurations. Prefer declarative subclasses when you want mypy to understand
-the source declaration, and generate stubs for dynamic classes.
+:func:`~pydantic_views.ensure_model_views` returns the model's ``Manager``, a registry indexed
+by view name. View classes are reused for a given source model and name; choose distinct
+names for different configurations. Prefer declarative subclasses when you want `mypy <https://mypy.readthedocs.io/>`_ to
+understand the source declaration, and generate stubs for dynamic classes.
+
+Identify views at runtime
+=========================
+
+Use :func:`~pydantic_views.is_view_of` when code receives a value or view class whose
+concrete source model is not known in advance. It checks both view instances and view
+classes, and its type guard lets type checkers narrow a matching value to the corresponding
+view type:
+
+.. testcode:: guide-is-view-of
+
+   from pydantic import BaseModel
+   from pydantic_views import LoadPreset, View, is_view_of
+
+   class Account(BaseModel):
+       id: int
+       username: str
+
+   class AccountLoad(View[Account], preset=LoadPreset):
+       pass
+
+   account_view = AccountLoad.model_validate({"id": 1, "username": "ada"})
+   assert is_view_of(account_view, Account)
+   assert is_view_of(AccountLoad, Account)
+
+   if is_view_of(account_view, Account):
+       account = account_view.view_build_to()
+       assert account.username == "ada"
+
+The model class comparison includes subclasses. A regular ``Account`` instance is not a
+view, so :func:`~pydantic_views.is_view_of` returns ``False`` for it.
 
 Moving between models and views
 ===============================
@@ -287,21 +323,22 @@ Moving between models and views
 
    * - Helper
      - Purpose
-   * - ``ViewClass.view_build_from(model)``
+   * - :meth:`~pydantic_views.View.view_build_from`
      - Validate a projection of the source model's explicitly set data.
-   * - ``view.view_build_to()``
+   * - :meth:`~pydantic_views.View.view_build_to`
      - Validate view data against the source model; missing required source fields raise
        a validation error.
-   * - ``view.view_apply_to(model)``
+   * - :meth:`~pydantic_views.View.view_apply_to`
      - Apply explicitly supplied changes and return the merged model.
-   * - ``ViewClass.view_class_root()``
+   * - :meth:`~pydantic_views.View.view_class_root`
      - Retrieve the source model class.
 
 Updates merge nested model instances and mappings recursively. Sequences are replaced;
 list items are not matched or merged by identity. Source-model validation applies to
 assigned values. The current merge implementation validates assignments on the supplied
-instance before returning a deep copy; pass ``model.model_copy(deep=True)`` if the original
-must remain unchanged. Use update views whose fields belong to the source model.
+instance before returning a deep copy; pass :meth:`~pydantic.BaseModel.model_copy` with
+``deep=True`` if the original must remain unchanged. Use update views whose fields belong
+to the source model.
 
 Next steps
 ==========
