@@ -2,9 +2,10 @@
 Type checking and IDEs
 ======================
 
-Runtime-generated fields need an explicit description for static tools. Choose the mypy
-plugin for declared views, or generate stubs from the actual runtime models. Both approaches
-can be used in the same project: the pydantic-views plugin skips ``.pyi`` files.
+Runtime-generated fields need an explicit description for static tools. Choose the
+`mypy <https://mypy.readthedocs.io/>`_ plugin for declared views, or generate stubs from the
+actual runtime models. Both approaches can be used in the same project: the
+`pydantic-views <https://pydantic-views.readthedocs.io/stable/>`_ plugin skips ``.pyi`` files.
 
 .. list-table:: Choose an approach
    :header-rows: 1
@@ -13,20 +14,21 @@ can be used in the same project: the pydantic-views plugin skips ``.pyi`` files.
    * - Tool or workflow
      - Recommended setup
      - Source of field information
-   * - mypy with declared views
-     - Enable both mypy plugins
+   * - `mypy <https://mypy.readthedocs.io/>`_ with declared views
+     - Enable both `mypy <https://mypy.readthedocs.io/>`_ plugins
      - Source annotations and view configuration
-   * - Pyright / Pylance
+   * - `Pyright <https://microsoft.github.io/pyright/>`_ /
+       `Pylance <https://github.com/microsoft/pylance-release>`_
      - Generate ``.pyi`` files
      - Runtime models and views
    * - Dynamic builders or tag-based selection
      - Generate ``.pyi`` files
      - The resolved runtime field set
 
-Configure mypy
-==============
+Configure `mypy <https://mypy.readthedocs.io/>`_
+=================================================
 
-Install mypy as a development dependency and enable the plugins in this order. Base-class
+Install `mypy <https://mypy.readthedocs.io/>`_ as a development dependency and enable the plugins in this order. Base-class
 hooks are selected on a first-match basis, so ``pydantic_views.mypy`` must come first.
 
 .. code-block:: toml
@@ -42,7 +44,7 @@ The equivalent INI configuration is:
    plugins = pydantic_views.mypy, pydantic.mypy
 
 Declare views with ``preset=`` or explicit keywords. For example, save this as a model
-module and run mypy against it:
+module and run `mypy <https://mypy.readthedocs.io/>`_ against it:
 
 .. code-block:: python
 
@@ -83,17 +85,19 @@ the synthesized signature, use this INI-only option:
 
 The default is ``true``. The custom option is read from ``mypy.ini`` or ``setup.cfg``;
 ``pyproject.toml`` can configure the plugins but not this option. Constructor strictness
-is a type-checking setting, separate from Pydantic's runtime ``extra`` configuration.
+is a type-checking setting, separate from `Pydantic <https://pydantic.dev/>`_'s runtime
+``extra`` configuration.
 
 Current plugin boundaries
 -------------------------
 
 * Prefer views declared in the same module as their source model. Access-mode annotations
-  may no longer be available when mypy analyzes imported models.
+  may no longer be available when `mypy <https://mypy.readthedocs.io/>`_ analyzes imported models.
 * ``preset=Name`` supports a module-level ``Preset(...)`` definition. Explicit keywords
   override the preset. ``**Preset._asdict()`` works at runtime but cannot be analyzed by
   the plugin.
-* Tag-based ``include_tags`` / ``exclude_tags`` filtering is not recovered from mypy's
+* Tag-based ``include_tags`` / ``exclude_tags`` filtering is not recovered from
+  `mypy <https://mypy.readthedocs.io/>`_'s
   processed annotations.
 * ``RootView`` is not field-expanded by the plugin.
 * Optional constructor arguments are modeled, but the plugin does not reproduce every
@@ -106,7 +110,7 @@ Generate runtime stubs
 ======================
 
 The bundled generator imports your modules, reads their models and generated views, and
-writes ``.pyi`` files. It does not run the mypy plugin.
+writes ``.pyi`` files. It does not run the `mypy <https://mypy.readthedocs.io/>`_ plugin.
 
 .. code-block:: console
 
@@ -121,7 +125,7 @@ you can also pass multiple modules and mirror their package tree into a separate
    python -m pydantic_views.stubgen myapp.models myapp.schemas --output-dir build/stubs
 
 When using a separate directory, configure your checker's stub search path, for example
-Pyright's ``stubPath``. Keep module/package paths intact. Run generation in your normal
+`Pyright <https://microsoft.github.io/pyright/>`_'s ``stubPath``. Keep module/package paths intact. Run generation in your normal
 application environment: imports execute module-level code and require the dependencies
 and configuration used by those modules.
 
@@ -132,9 +136,11 @@ The generator describes both the views and the surrounding module symbols:
 
 * Declared views and views generated for nested models, with their runtime fields and
   explicit keyword-only constructor signatures.
-* Ordinary classes, Pydantic models, enums, nested classes, and ``TypedDict`` definitions.
+* Ordinary classes, `Pydantic <https://pydantic.dev/>`_ models, enums, nested classes, and
+  ``TypedDict`` definitions.
 * Module-level functions and variables discovered by the generator, plus ``type`` aliases.
-* Generic parameters, parameterized Pydantic annotations, and explicit TypeVar covariance
+* Generic parameters, parameterized `Pydantic <https://pydantic.dev/>`_ annotations, and
+  explicit TypeVar covariance
   or contravariance, including bounds, constraints, and defaults.
 * ``MISSING`` in field and constructor annotations, with the corresponding import.
 
@@ -162,7 +168,7 @@ An adjacent stub takes precedence over its ``.py`` file for type checking. Regen
 when source schemas change, and include generation in your development or CI workflow.
 The generator describes the symbols it can inspect; review the output for unusual dynamic
 exports or annotations it cannot resolve. Do not treat it as a general-purpose replacement
-for a hand-maintained stub for every possible Python module.
+for a hand-maintained stub for every possible `Python <https://www.python.org/>`_ module.
 
 For the bundled example module, run:
 
@@ -170,5 +176,5 @@ For the bundled example module, run:
 
    python -m pydantic_views.stubgen examples.models
 
-The mypy plugin leaves stub declarations unchanged, preserving their field sets and
+The `mypy <https://mypy.readthedocs.io/>`_ plugin leaves stub declarations unchanged, preserving their field sets and
 constructor signatures instead of adding a second ``__init__``.

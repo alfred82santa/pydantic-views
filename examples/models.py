@@ -95,7 +95,9 @@ class Address(BaseModel):
     def from_string(cls, address_str: str) -> Address:
         """A classmethod that uses the generated views, to demonstrate that they are fully usable."""
         street, number, zip_code = address_str.split(", ")
-        return cls.model_validate({"street": street, "number": int(number), "zip_code": zip_code})
+        return cls.model_validate(
+            {"street": street, "number": int(number), "zip_code": zip_code}
+        )
 
     @staticmethod
     def is_valid_zip(zip_code: str) -> bool:
@@ -137,15 +139,17 @@ class User(BaseModel):
     invite_code: WriteOnlyOnCreation[str | None] = None
 
     # Combined modes with a preserved validator.
-    score: Annotated[int, AccessMode.READ_ONLY, AccessMode.WRITE_ONLY_ON_CREATION, Gt(5)] = 10
+    score: Annotated[
+        int, AccessMode.READ_ONLY, AccessMode.WRITE_ONLY_ON_CREATION, Gt(5)
+    ] = 10
 
     # Never exposed.
     internal_flags: Hidden[int] = 0
 
     # Complex / nested fields.
     primary_address: Address
-    addresses: list[Address] = Field(default_factory=list)
-    roles: dict[str, Role] = Field(default_factory=dict)
+    addresses: Annotated[list[Address], Field(default_factory=list)]
+    roles: Annotated[dict[str, Role], Field(default_factory=dict)]
 
     @computed_field
     def display_name(self) -> str:

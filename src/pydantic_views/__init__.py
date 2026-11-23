@@ -30,6 +30,7 @@ from .builder import (
     ensure_model_views,
 )
 from .manager import Manager
+from .utils import is_view_of
 from .view import RootView, View
 
 __all__ = [
@@ -56,4 +57,5 @@ __all__ = [
     "View",
     "RootView",
     "PartialPreset",
+    "is_view_of",
 ]
